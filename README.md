@@ -8,8 +8,19 @@
 
 ## 現在地
 
-設計とOSS素材の初期基盤。**実行できるアプリはまだない。** 現在はシステムを先に実装する計画を立てている。UIの監修・仕上げはユーザーが後から行い、まず変更しやすい仮画面と性能確認用の最小アニメーションを用意する。GPUIのWindows / Android実機検証、保存・同期・AI接続は未実施。
+**ローカルで動くRustコアとGPUIの仮アプリを実装した段階。** タスク・リスト・予定・作業枠の操作API、SQLite保存、更新競合の検査、永続Undo/Redoを備える。仮画面ではタスクの追加・編集・完了・削除、時間割り当て、Undo/Redoを操作できる。UIの仕上げはユーザーが後から監修する。
 
+Linuxのネイティブ画面で日本語の貼り付け・保存と一連の操作を検証した。Windows実機でのIME・読み上げ・性能、Androidのビルド・実機、同期・AI接続は未検証または未実装。繰り返し・入出力・通知などは後続段階とする。
+
+```sh
+cargo test --locked -p ultratasks-core --all-targets
+cargo run --locked -p ultratasks-desktop
+```
+
+- [ビルド・起動・テスト・性能計測](docs/development.md)
+- [初期実装の検証記録・実画面・計測結果](docs/validation/README.md)
+- [コアの操作APIと制約](crates/ultratasks-core/README.md)
+- [Androidの具体的な依存検証](docs/android-spike.md)
 - [システム実装計画・決定事項・完了条件](docs/implementation-plan.md)
 - [UIの方向性と制作手順](docs/ui-direction.md)
 - [画面コンセプト01・02](design/concepts/README.md)
@@ -34,4 +45,6 @@ python3 scripts/import_design_assets.py
 python3 scripts/build_design_preview.py
 ```
 
-UltraTasks本体の公開・配布ライセンスは未決定。第三者素材にはそれぞれのライセンスが適用される。
+Rust 2024 / Rust 1.99.1、GPUI Kit 0.9.0、SQLite（rusqlite）、chrono / chrono-tz、UUID v7、serde、proptestを採用。依存はCargo.lockへ固定する。コアの検証には故障注入・更新競合・操作列のプロパティテストを含む。
+
+UltraTasks本体の公開・配布ライセンスは未決定。第三者素材・ライブラリにはそれぞれのライセンスが適用される。

@@ -1,6 +1,8 @@
 # システム実装計画
 
-2026-11-09。現在は計画段階。アプリコード、ビルド、実機検証は未実施。
+2026-11-09。ローカルコアとGPUI仮アプリの初期実装を追加した。Task / TaskList / Event / TimeBlock、SQLite、基本検索、更新版の照合、永続Undo/Redoを実装し、Linux上でテスト・GUI操作を確認している。Windows実機とAndroidは未検証。各段階の項目は計画であり、一括して実装済みという意味ではない。
+
+現在の不足: Calendarの所属先管理、期限による絞り込み、繰り返し、入出力、バックアップ、通知、同期、MCP・AI。仮画面はタスクと作業枠が中心で、Event / TaskListの全編集UIは未接続。[開発と検証](development.md)と[Androidの調査](android-spike.md)も参照する。
 
 ## 今回の方針変更
 
