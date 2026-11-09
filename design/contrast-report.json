@@ -1,0 +1,181 @@
+{
+  "method": "WCAG relative luminance, opaque sRGB, selected normal-text pairs only; not full accessibility certification",
+  "results": [
+    {
+      "theme": "dark",
+      "foreground": "text_primary",
+      "background": "canvas",
+      "ratio": 16.246,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "text_secondary",
+      "background": "canvas",
+      "ratio": 9.056,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "text_primary",
+      "background": "surface",
+      "ratio": 15.153,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "text_secondary",
+      "background": "surface",
+      "ratio": 8.447,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "text_primary",
+      "background": "surface_hover",
+      "ratio": 13.702,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "text_secondary",
+      "background": "surface_hover",
+      "ratio": 7.638,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "action_text",
+      "background": "action_background",
+      "ratio": 5.778,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "selection_text",
+      "background": "selection_background",
+      "ratio": 11.375,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "positive_text",
+      "background": "positive_background",
+      "ratio": 7.96,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "warning_text",
+      "background": "warning_background",
+      "ratio": 10.265,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foreground": "error_text",
+      "background": "error_background",
+      "ratio": 7.634,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "text_primary",
+      "background": "canvas",
+      "ratio": 15.983,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "text_secondary",
+      "background": "canvas",
+      "ratio": 5.791,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "text_primary",
+      "background": "surface",
+      "ratio": 15.585,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "text_secondary",
+      "background": "surface",
+      "ratio": 5.647,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "text_primary",
+      "background": "surface_hover",
+      "ratio": 14.408,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "text_secondary",
+      "background": "surface_hover",
+      "ratio": 5.22,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "action_text",
+      "background": "action_background",
+      "ratio": 4.648,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "selection_text",
+      "background": "selection_background",
+      "ratio": 11.259,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "positive_text",
+      "background": "positive_background",
+      "ratio": 10.97,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "warning_text",
+      "background": "warning_background",
+      "ratio": 10.47,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foreground": "error_text",
+      "background": "error_background",
+      "ratio": 10.34,
+      "minimum": 4.5,
+      "pass": true
+    }
+  ]
+}

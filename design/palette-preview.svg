@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="830" viewBox="0 0 1200 830">
+<title>UltraTasks draft design tokens</title>
+<desc>Dark and light semantic colors with actual Radix colors and computed text contrast. This is a design review sheet, not an application screenshot.</desc>
+<rect width="1200" height="830" fill="#e8e8ec"/>
+<g font-family="Inter, Segoe UI, sans-serif">
+<text x="36" y="42" font-size="22" fill="#1c2024">UltraTasks / Color foundation</text>
+<text x="36" y="68" font-size="13" fill="#60646c">Radix Colors · draft semantic mapping · native UI validation pending</text>
+<rect x="24" y="96" width="564" height="710" rx="12" fill="#111113"/>
+<text x="52" y="140" font-size="20" fill="#edeef0">Dark / Quiet focus</text>
+<text x="52" y="168" font-size="13" fill="#b0b4ba">Shared roles, distinct luminance</text>
+<text x="52" y="202" font-size="12" fill="#b0b4ba">SLATE</text>
+<rect x="52" y="214" width="38" height="26" rx="4" fill="#111113"/>
+<rect x="94" y="214" width="38" height="26" rx="4" fill="#18191b"/>
+<rect x="136" y="214" width="38" height="26" rx="4" fill="#212225"/>
+<rect x="178" y="214" width="38" height="26" rx="4" fill="#272a2d"/>
+<rect x="220" y="214" width="38" height="26" rx="4" fill="#2e3135"/>
+<rect x="262" y="214" width="38" height="26" rx="4" fill="#363a3f"/>
+<rect x="304" y="214" width="38" height="26" rx="4" fill="#43484e"/>
+<rect x="346" y="214" width="38" height="26" rx="4" fill="#5a6169"/>
+<rect x="388" y="214" width="38" height="26" rx="4" fill="#696e77"/>
+<rect x="430" y="214" width="38" height="26" rx="4" fill="#777b84"/>
+<rect x="472" y="214" width="38" height="26" rx="4" fill="#b0b4ba"/>
+<rect x="514" y="214" width="38" height="26" rx="4" fill="#edeef0"/>
+<text x="52" y="272" font-size="12" fill="#b0b4ba">BLUE</text>
+<rect x="52" y="284" width="38" height="26" rx="4" fill="#0d1520"/>
+<rect x="94" y="284" width="38" height="26" rx="4" fill="#111927"/>
+<rect x="136" y="284" width="38" height="26" rx="4" fill="#0d2847"/>
+<rect x="178" y="284" width="38" height="26" rx="4" fill="#003362"/>
+<rect x="220" y="284" width="38" height="26" rx="4" fill="#004074"/>
+<rect x="262" y="284" width="38" height="26" rx="4" fill="#104d87"/>
+<rect x="304" y="284" width="38" height="26" rx="4" fill="#205d9e"/>
+<rect x="346" y="284" width="38" height="26" rx="4" fill="#2870bd"/>
+<rect x="388" y="284" width="38" height="26" rx="4" fill="#0090ff"/>
+<rect x="430" y="284" width="38" height="26" rx="4" fill="#3b9eff"/>
+<rect x="472" y="284" width="38" height="26" rx="4" fill="#70b8ff"/>
+<rect x="514" y="284" width="38" height="26" rx="4" fill="#c2e6ff"/>
+<text x="52" y="342" font-size="12" fill="#b0b4ba">JADE</text>
+<rect x="52" y="354" width="38" height="26" rx="4" fill="#0d1512"/>
+<rect x="94" y="354" width="38" height="26" rx="4" fill="#121c18"/>
+<rect x="136" y="354" width="38" height="26" rx="4" fill="#0f2e22"/>
+<rect x="178" y="354" width="38" height="26" rx="4" fill="#0b3b2c"/>
+<rect x="220" y="354" width="38" height="26" rx="4" fill="#114837"/>
+<rect x="262" y="354" width="38" height="26" rx="4" fill="#1b5745"/>
+<rect x="304" y="354" width="38" height="26" rx="4" fill="#246854"/>
+<rect x="346" y="354" width="38" height="26" rx="4" fill="#2a7e68"/>
+<rect x="388" y="354" width="38" height="26" rx="4" fill="#29a383"/>
+<rect x="430" y="354" width="38" height="26" rx="4" fill="#27b08b"/>
+<rect x="472" y="354" width="38" height="26" rx="4" fill="#1fd8a4"/>
+<rect x="514" y="354" width="38" height="26" rx="4" fill="#adf0d4"/>
+<text x="52" y="412" font-size="12" fill="#b0b4ba">AMBER</text>
+<rect x="52" y="424" width="38" height="26" rx="4" fill="#16120c"/>
+<rect x="94" y="424" width="38" height="26" rx="4" fill="#1d180f"/>
+<rect x="136" y="424" width="38" height="26" rx="4" fill="#302008"/>
+<rect x="178" y="424" width="38" height="26" rx="4" fill="#3f2700"/>
+<rect x="220" y="424" width="38" height="26" rx="4" fill="#4d3000"/>
+<rect x="262" y="424" width="38" height="26" rx="4" fill="#5c3d05"/>
+<rect x="304" y="424" width="38" height="26" rx="4" fill="#714f19"/>
+<rect x="346" y="424" width="38" height="26" rx="4" fill="#8f6424"/>
+<rect x="388" y="424" width="38" height="26" rx="4" fill="#ffc53d"/>
+<rect x="430" y="424" width="38" height="26" rx="4" fill="#ffd60a"/>
+<rect x="472" y="424" width="38" height="26" rx="4" fill="#ffca16"/>
+<rect x="514" y="424" width="38" height="26" rx="4" fill="#ffe7b3"/>
+<text x="52" y="482" font-size="12" fill="#b0b4ba">TOMATO</text>
+<rect x="52" y="494" width="38" height="26" rx="4" fill="#181111"/>
+<rect x="94" y="494" width="38" height="26" rx="4" fill="#1f1513"/>
+<rect x="136" y="494" width="38" height="26" rx="4" fill="#391714"/>
+<rect x="178" y="494" width="38" height="26" rx="4" fill="#4e1511"/>
+<rect x="220" y="494" width="38" height="26" rx="4" fill="#5e1c16"/>
+<rect x="262" y="494" width="38" height="26" rx="4" fill="#6e2920"/>
+<rect x="304" y="494" width="38" height="26" rx="4" fill="#853a2d"/>
+<rect x="346" y="494" width="38" height="26" rx="4" fill="#ac4d39"/>
+<rect x="388" y="494" width="38" height="26" rx="4" fill="#e54d2e"/>
+<rect x="430" y="494" width="38" height="26" rx="4" fill="#ec6142"/>
+<rect x="472" y="494" width="38" height="26" rx="4" fill="#ff977d"/>
+<rect x="514" y="494" width="38" height="26" rx="4" fill="#fbd3cb"/>
+<rect x="52" y="574" width="508" height="66" rx="6" fill="#18191b"/>
+<text x="70" y="601" font-size="14" fill="#edeef0">Refine calendar interactions</text>
+<text x="70" y="624" font-size="12" fill="#b0b4ba">Today · 45 minutes · Work</text>
+<rect x="52" y="660" width="140" height="36" rx="6" fill="#0090ff"/>
+<text x="122" y="683" text-anchor="middle" font-size="13" fill="#111113">Add task</text>
+<rect x="208" y="660" width="352" height="36" rx="6" fill="#0d2847"/>
+<text x="224" y="683" font-size="13" fill="#c2e6ff">Task scheduled · Undo</text>
+<text x="52" y="742" font-size="12" fill="#b0b4ba">Body 14 / 20 · Desktop row 36 · Android target 48dp</text>
+<text x="52" y="770" font-size="12" fill="#b0b4ba">Text pair checks recorded in contrast-report.json</text>
+<rect x="612" y="96" width="564" height="710" rx="12" fill="#fcfcfd"/>
+<text x="640" y="140" font-size="20" fill="#1c2024">Light / Quiet focus</text>
+<text x="640" y="168" font-size="13" fill="#60646c">Shared roles, distinct luminance</text>
+<text x="640" y="202" font-size="12" fill="#60646c">SLATE</text>
+<rect x="640" y="214" width="38" height="26" rx="4" fill="#fcfcfd"/>
+<rect x="682" y="214" width="38" height="26" rx="4" fill="#f9f9fb"/>
+<rect x="724" y="214" width="38" height="26" rx="4" fill="#f0f0f3"/>
+<rect x="766" y="214" width="38" height="26" rx="4" fill="#e8e8ec"/>
+<rect x="808" y="214" width="38" height="26" rx="4" fill="#e0e1e6"/>
+<rect x="850" y="214" width="38" height="26" rx="4" fill="#d9d9e0"/>
+<rect x="892" y="214" width="38" height="26" rx="4" fill="#cdced6"/>
+<rect x="934" y="214" width="38" height="26" rx="4" fill="#b9bbc6"/>
+<rect x="976" y="214" width="38" height="26" rx="4" fill="#8b8d98"/>
+<rect x="1018" y="214" width="38" height="26" rx="4" fill="#80838d"/>
+<rect x="1060" y="214" width="38" height="26" rx="4" fill="#60646c"/>
+<rect x="1102" y="214" width="38" height="26" rx="4" fill="#1c2024"/>
+<text x="640" y="272" font-size="12" fill="#60646c">BLUE</text>
+<rect x="640" y="284" width="38" height="26" rx="4" fill="#fbfdff"/>
+<rect x="682" y="284" width="38" height="26" rx="4" fill="#f4faff"/>
+<rect x="724" y="284" width="38" height="26" rx="4" fill="#e6f4fe"/>
+<rect x="766" y="284" width="38" height="26" rx="4" fill="#d5efff"/>
+<rect x="808" y="284" width="38" height="26" rx="4" fill="#c2e5ff"/>
+<rect x="850" y="284" width="38" height="26" rx="4" fill="#acd8fc"/>
+<rect x="892" y="284" width="38" height="26" rx="4" fill="#8ec8f6"/>
+<rect x="934" y="284" width="38" height="26" rx="4" fill="#5eb1ef"/>
+<rect x="976" y="284" width="38" height="26" rx="4" fill="#0090ff"/>
+<rect x="1018" y="284" width="38" height="26" rx="4" fill="#0588f0"/>
+<rect x="1060" y="284" width="38" height="26" rx="4" fill="#0d74ce"/>
+<rect x="1102" y="284" width="38" height="26" rx="4" fill="#113264"/>
+<text x="640" y="342" font-size="12" fill="#60646c">JADE</text>
+<rect x="640" y="354" width="38" height="26" rx="4" fill="#fbfefd"/>
+<rect x="682" y="354" width="38" height="26" rx="4" fill="#f4fbf7"/>
+<rect x="724" y="354" width="38" height="26" rx="4" fill="#e6f7ed"/>
+<rect x="766" y="354" width="38" height="26" rx="4" fill="#d6f1e3"/>
+<rect x="808" y="354" width="38" height="26" rx="4" fill="#c3e9d7"/>
+<rect x="850" y="354" width="38" height="26" rx="4" fill="#acdec8"/>
+<rect x="892" y="354" width="38" height="26" rx="4" fill="#8bceb6"/>
+<rect x="934" y="354" width="38" height="26" rx="4" fill="#56ba9f"/>
+<rect x="976" y="354" width="38" height="26" rx="4" fill="#29a383"/>
+<rect x="1018" y="354" width="38" height="26" rx="4" fill="#26997b"/>
+<rect x="1060" y="354" width="38" height="26" rx="4" fill="#208368"/>
+<rect x="1102" y="354" width="38" height="26" rx="4" fill="#1d3b31"/>
+<text x="640" y="412" font-size="12" fill="#60646c">AMBER</text>
+<rect x="640" y="424" width="38" height="26" rx="4" fill="#fefdfb"/>
+<rect x="682" y="424" width="38" height="26" rx="4" fill="#fefbe9"/>
+<rect x="724" y="424" width="38" height="26" rx="4" fill="#fff7c2"/>
+<rect x="766" y="424" width="38" height="26" rx="4" fill="#ffee9c"/>
+<rect x="808" y="424" width="38" height="26" rx="4" fill="#fbe577"/>
+<rect x="850" y="424" width="38" height="26" rx="4" fill="#f3d673"/>
+<rect x="892" y="424" width="38" height="26" rx="4" fill="#e9c162"/>
+<rect x="934" y="424" width="38" height="26" rx="4" fill="#e2a336"/>
+<rect x="976" y="424" width="38" height="26" rx="4" fill="#ffc53d"/>
+<rect x="1018" y="424" width="38" height="26" rx="4" fill="#ffba18"/>
+<rect x="1060" y="424" width="38" height="26" rx="4" fill="#ab6400"/>
+<rect x="1102" y="424" width="38" height="26" rx="4" fill="#4f3422"/>
+<text x="640" y="482" font-size="12" fill="#60646c">TOMATO</text>
+<rect x="640" y="494" width="38" height="26" rx="4" fill="#fffcfc"/>
+<rect x="682" y="494" width="38" height="26" rx="4" fill="#fff8f7"/>
+<rect x="724" y="494" width="38" height="26" rx="4" fill="#feebe7"/>
+<rect x="766" y="494" width="38" height="26" rx="4" fill="#ffdcd3"/>
+<rect x="808" y="494" width="38" height="26" rx="4" fill="#ffcdc2"/>
+<rect x="850" y="494" width="38" height="26" rx="4" fill="#fdbdaf"/>
+<rect x="892" y="494" width="38" height="26" rx="4" fill="#f5a898"/>
+<rect x="934" y="494" width="38" height="26" rx="4" fill="#ec8e7b"/>
+<rect x="976" y="494" width="38" height="26" rx="4" fill="#e54d2e"/>
+<rect x="1018" y="494" width="38" height="26" rx="4" fill="#dd4425"/>
+<rect x="1060" y="494" width="38" height="26" rx="4" fill="#d13415"/>
+<rect x="1102" y="494" width="38" height="26" rx="4" fill="#5c271f"/>
+<rect x="640" y="574" width="508" height="66" rx="6" fill="#f9f9fb"/>
+<text x="658" y="601" font-size="14" fill="#1c2024">Refine calendar interactions</text>
+<text x="658" y="624" font-size="12" fill="#60646c">Today · 45 minutes · Work</text>
+<rect x="640" y="660" width="140" height="36" rx="6" fill="#0d74ce"/>
+<text x="710" y="683" text-anchor="middle" font-size="13" fill="#fcfcfd">Add task</text>
+<rect x="796" y="660" width="352" height="36" rx="6" fill="#e6f4fe"/>
+<text x="812" y="683" font-size="13" fill="#113264">Task scheduled · Undo</text>
+<text x="640" y="742" font-size="12" fill="#60646c">Body 14 / 20 · Desktop row 36 · Android target 48dp</text>
+<text x="640" y="770" font-size="12" fill="#60646c">Text pair checks recorded in contrast-report.json</text>
+</g></svg>

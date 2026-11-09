@@ -1,0 +1,49 @@
+{
+  "radix-ui/colors": {
+    "commit": "dbdb85470547c7d34b9001f48fddb08ded335979",
+    "license": "MIT",
+    "upstream_files": [
+      "src/light.ts",
+      "src/dark.ts",
+      "LICENSE"
+    ],
+    "local_files": [
+      "design/palettes.json",
+      "third_party/radix-colors/LICENSE"
+    ],
+    "change": "Extracted slate, blue, jade, amber, tomato hex scales to JSON; values unchanged."
+  },
+  "lucide-icons/lucide": {
+    "commit": "45aaec4b721c98aa86a2acd0ab7281bcf68b9c5e",
+    "license": "ISC; includes MIT notice for Feather-derived icons",
+    "upstream_files": [
+      "icons/calendar-days.svg",
+      "icons/circle-check.svg",
+      "icons/inbox.svg",
+      "icons/list-todo.svg",
+      "icons/plus.svg",
+      "icons/search.svg",
+      "icons/clock.svg",
+      "icons/link.svg",
+      "icons/undo-2.svg",
+      "icons/chevron-left.svg",
+      "icons/chevron-right.svg",
+      "LICENSE"
+    ],
+    "local_files": [
+      "design/icons/calendar-days.svg",
+      "design/icons/circle-check.svg",
+      "design/icons/inbox.svg",
+      "design/icons/list-todo.svg",
+      "design/icons/plus.svg",
+      "design/icons/search.svg",
+      "design/icons/clock.svg",
+      "design/icons/link.svg",
+      "design/icons/undo-2.svg",
+      "design/icons/chevron-left.svg",
+      "design/icons/chevron-right.svg",
+      "third_party/lucide/LICENSE"
+    ],
+    "change": "SVG files and complete license copied unchanged."
+  }
+}
