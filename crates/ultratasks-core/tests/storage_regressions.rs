@@ -103,7 +103,7 @@ fn migrating_v1_adds_default_page_index_without_changing_data() {
     assert_eq!(
         db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     assert_eq!(
         db.query_row(

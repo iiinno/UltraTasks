@@ -16,5 +16,8 @@ iana-time-zone = "0.1"
 serde_json = "1"
 ultratasks-core = { path = "../../crates/ultratasks-core" }
 
+[target.'cfg(windows)'.dependencies]
+ultratasks-notifications = { path = "../../crates/ultratasks-notifications" }
+
 [lints]
 workspace = true

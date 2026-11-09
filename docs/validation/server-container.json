@@ -1,0 +1,29 @@
+{
+  "platform": "Linux x86_64 Docker29.9.2/vfs",
+  "rust": "1.99.1",
+  "profile": "release",
+  "image_id": "sha256:8a5a9aa8ab9d6bbf9353b4f4848c275ec75bf0938fa8b968475e175fcf93a33d",
+  "checks": {
+    "health": true,
+    "missing_auth_401": true,
+    "invalid_auth_401": true,
+    "create": true,
+    "read": true,
+    "update": true,
+    "delete_tombstone": true,
+    "retry_idempotent": true,
+    "same_id_changed_payload_rejected": true,
+    "stale_edit_conflict": true,
+    "stale_resurrection_conflict": true,
+    "nonroot_uid10001": true,
+    "read_only_rootfs": true,
+    "no_build_secret_or_toolchain_in_runtime": true,
+    "runtime_public_ca_roots_present": true,
+    "graceful_sigint_exit0": true,
+    "restart_retains_data_and_credentials": true,
+    "restart_changes_incarnation": true,
+    "revoked_token_401": true
+  },
+  "tls_proxy_deployment_verified": false,
+  "image_size_bytes": 88222325
+}

@@ -1,0 +1,31 @@
+services:
+  ultratasks:
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    volumes:
+      - data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # No published HTTP port: only the TLS proxy reaches this service.
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      ULTRATASKS_DOMAIN: ${ULTRATASKS_DOMAIN:?set your DNS hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

@@ -21,8 +21,8 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         .nth(1)
         .unwrap_or_else(|| "1000".into())
         .parse()?;
-    if !(100..=100_000).contains(&count) {
-        return Err("fixture count must be between 100 and 100000".into());
+    if !(100..=99_900).contains(&count) {
+        return Err("fixture count must be between 100 and 99900 (plus 100 time blocks)".into());
     }
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("measurement.sqlite3");
@@ -123,7 +123,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
-            "scope": "temporary on-disk SQLite, warm-cache sequential workload, includes transaction/history persistence; excludes GUI/rendering and network",
+            "scope": "temporary on-disk SQLite, warm-cache sequential workload, includes transaction/history/sync-outbox/capacity persistence; excludes GUI/rendering and network",
             "environment": {
                 "os": std::env::consts::OS, "architecture": std::env::consts::ARCH,
                 "logical_cpu_count": std::thread::available_parallelism().map(usize::from).ok(),

@@ -1,4 +1,5 @@
 mod backend;
+mod notifications;
 mod presentation;
 mod theme;
 mod views;
@@ -20,6 +21,7 @@ fn main() -> Result<()> {
         .and_then(|name| name.parse().ok())
         .unwrap_or(chrono_tz::UTC);
     let mut motion = true;
+    let mut notifications = true;
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
@@ -38,9 +40,10 @@ fn main() -> Result<()> {
                     .context("invalid IANA timezone")?
             }
             Some("--reduce-motion") => motion = false,
+            Some("--disable-notifications") => notifications = false,
             Some("--help") => {
                 println!(
-                    "UltraTasks\n  --database PATH       SQLite database (default: OS application data)\n  --timezone IANA       Display timezone (default: system timezone)\n  --reduce-motion       Disable prototype animations"
+                    "UltraTasks\n  --database PATH       SQLite database (default: OS application data)\n  --timezone IANA       Display timezone (default: system timezone)\n  --reduce-motion       Disable prototype animations\n  --disable-notifications  Cancel this device's scheduled reminders"
                 );
                 return Ok(());
             }
@@ -58,7 +61,7 @@ fn main() -> Result<()> {
     {
         std::fs::create_dir_all(parent)?;
     }
-    let backend = backend::Backend::start(database)?;
+    let backend = backend::Backend::start(database, timezone, notifications)?;
     let tokens = theme::ThemeTokens::load()?;
     gpui_kit::application()
         .with_assets(gpui_kit::assets::Assets)

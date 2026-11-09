@@ -18,8 +18,8 @@ env:
   RUST_BACKTRACE: '1'
 
 jobs:
-  core:
-    name: Core / ${{ matrix.os }}
+  systems:
+    name: Systems / ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,13 +31,27 @@ jobs:
         run: rustup show
       - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
         with:
-          key: core
+          key: systems
       - name: Formatting
         run: cargo fmt --all -- --check
-      - name: Core tests and acceptance scenarios
-        run: cargo test --locked -p ultratasks-core --all-targets
+      - name: System tests and acceptance scenarios
+        run: cargo test --locked --workspace --exclude ultratasks-desktop --all-targets
       - name: Static analysis
-        run: cargo clippy --locked -p ultratasks-core --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --exclude ultratasks-desktop --all-targets -- -D warnings
+      - name: Build headless tools
+        run: cargo build --locked --release -p ultratasks-server -p ultratasks-sync -p ultratasks-automation -p ultratasks-notifications
+      - name: Retain headless tools
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ultratasks-tools-${{ matrix.os }}
+          path: |
+            target/release/ultratasks-server*
+            target/release/ultratasks-sync*
+            target/release/ultratasks-automation*
+            target/release/ultratasks-notifications*
+            !target/release/*.d
+          if-no-files-found: error
+          retention-days: 7
 
   windows-desktop:
     name: Windows native desktop
@@ -58,11 +72,41 @@ jobs:
       - name: Desktop date and presentation tests
         run: cargo test --locked -p ultratasks-desktop
       - name: Build Windows application
-        run: cargo build --locked --release -p ultratasks-desktop
+        run: cargo build --locked --release -p ultratasks-desktop -p ultratasks-notifications
       - name: Retain development binary
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ultratasks-windows-x64
-          path: target/release/ultratasks-desktop.exe
+          path: |
+            target/release/ultratasks-desktop.exe
+            target/release/ultratasks-notifications.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  android-system:
+    name: Android native system host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned toolchain and Android target
+        run: |
+          rustup show
+          rustup target add aarch64-linux-android
+      - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
+        with:
+          key: android-system
+      - name: Install Android build dependencies
+        run: |
+          sdkmanager --licenses <<< $'y\ny\ny\ny\ny\ny\ny\ny' >/dev/null
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.0.13004108'
+      - name: Real JVM and JNI boundary tests
+        run: bash apps/android/test-jni.sh
+      - name: Build ARM64 native library and verify debug APK
+        run: bash apps/android/build.sh
+      - name: Retain system-host APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ultratasks-android-system-arm64
+          path: target/android-system/ultratasks-system-debug.apk
           if-no-files-found: error
           retention-days: 7

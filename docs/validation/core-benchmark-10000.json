@@ -1,11 +1,11 @@
 {
   "caveat": "Numbers describe this process, filesystem and host only. Record hardware and OS separately for target-device comparisons.",
   "complete_task": {
-    "max": 2059,
-    "min": 682,
-    "p50": 856,
-    "p95": 1226,
-    "p99": 1720,
+    "max": 13734,
+    "min": 810,
+    "p50": 1307,
+    "p95": 3725,
+    "p99": 5350,
     "samples": 100,
     "unit": "microseconds"
   },
@@ -26,33 +26,33 @@
     "sqlite_version": "3.51.1",
     "storage_directory": "/tmp"
   },
-  "insert_tasks_total_ms": 9426.260442,
+  "insert_tasks_total_ms": 12919.934226000001,
   "query_tasks_first_page": {
-    "max": 163,
-    "min": 50,
-    "p50": 68,
-    "p95": 127,
-    "p99": 142,
+    "max": 290,
+    "min": 58,
+    "p50": 114,
+    "p95": 152,
+    "p99": 177,
     "samples": 100,
     "unit": "microseconds"
   },
   "query_tasks_tail_match": {
-    "max": 2367,
-    "min": 1341,
-    "p50": 1456,
-    "p95": 1831,
-    "p99": 2208,
+    "max": 10673,
+    "min": 1370,
+    "p50": 2231,
+    "p95": 2747,
+    "p99": 3295,
     "samples": 100,
     "unit": "microseconds"
   },
   "query_time_blocks": {
-    "max": 420,
-    "min": 127,
-    "p50": 140,
-    "p95": 216,
-    "p99": 356,
+    "max": 393,
+    "min": 132,
+    "p50": 235,
+    "p95": 306,
+    "p99": 371,
     "samples": 100,
     "unit": "microseconds"
   },
-  "scope": "temporary on-disk SQLite, warm-cache sequential workload, includes transaction/history persistence; excludes GUI/rendering and network"
+  "scope": "temporary on-disk SQLite, warm-cache sequential workload, includes transaction/history/sync-outbox/capacity persistence; excludes GUI/rendering and network"
 }

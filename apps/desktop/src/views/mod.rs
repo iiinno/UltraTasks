@@ -149,8 +149,13 @@ impl TasksView {
                 this.pending = false;
                 match result {
                     Ok(snapshot) => {
+                        this.message = snapshot
+                            .notification_warning
+                            .clone()
+                            .unwrap_or_else(|| "ローカルに保存済み".into())
+                            .into();
+                        this.is_error = snapshot.notification_warning.is_some();
                         this.snapshot = Some(snapshot);
-                        this.message = "ローカルに保存済み".into();
                         if clear_input {
                             this.title
                                 .update(cx, |input, cx| input.set_value("", window, cx));

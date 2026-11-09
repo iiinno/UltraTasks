@@ -5,7 +5,10 @@ use crate::{
 use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Utc};
 use chrono_tz::Tz;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -40,13 +43,26 @@ pub enum Error {
 /// Synchronous, transactional engine. Create and use it on a worker thread.
 /// The actor is a durable history stream identifier, not an authentication mechanism.
 pub struct Engine {
-    connection: Connection,
-    actor: String,
+    pub(crate) connection: Connection,
+    pub(crate) actor: String,
 }
 
 impl Engine {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         Self::open_for_actor(path, "local")
+    }
+
+    /// Read an existing current-schema database without creating, migrating or
+    /// changing its journal mode. SQLite itself rejects writes on this handle.
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<Self> {
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        storage::validate_read_only(&connection)?;
+        connection.pragma_update(None, "query_only", true)?;
+        Ok(Self {
+            connection,
+            actor: "readonly".into(),
+        })
     }
 
     pub fn open_for_actor(path: impl AsRef<Path>, actor: impl Into<String>) -> Result<Self> {
@@ -64,35 +80,342 @@ impl Engine {
             ));
         }
         storage::initialize(&mut connection)?;
+        crate::sync::initialize(&mut connection)?;
         Ok(Self { connection, actor })
     }
 
     pub fn execute(&mut self, command: Command) -> Result<Outcome> {
+        Ok(self.execute_batch(vec![command])?.remove(0))
+    }
+
+    /// Apply a bounded group atomically; the entire group is one undo step.
+    pub fn execute_batch(&mut self, commands: Vec<Command>) -> Result<Vec<Outcome>> {
+        self.run_commands(commands, None, false, &[], false)
+    }
+
+    /// Retry-safe request, scoped to the durable actor. Keys are retained until a
+    /// full data export/import reset; reusing one with different input is an error.
+    pub fn execute_idempotent(
+        &mut self,
+        request_id: &str,
+        commands: Vec<Command>,
+    ) -> Result<Vec<Outcome>> {
+        if request_id.is_empty()
+            || request_id.len() > 128
+            || request_id.chars().any(char::is_control)
+        {
+            return Err(invalid("request ID must be 1..=128 bytes without controls"));
+        }
+        self.run_commands(commands, Some(request_id), false, &[], false)
+    }
+
+    /// Run the exact command/constraint path, then roll back all effects.
+    pub fn preview_batch(&mut self, commands: Vec<Command>) -> Result<Vec<Outcome>> {
+        self.run_commands(commands, None, true, &[], false)
+    }
+
+    pub fn execute_idempotent_guarded(
+        &mut self,
+        request_id: &str,
+        commands: Vec<Command>,
+        guards: &[(EntityId, u64)],
+    ) -> Result<Vec<Outcome>> {
+        if request_id.is_empty()
+            || request_id.len() > 128
+            || request_id.chars().any(char::is_control)
+        {
+            return Err(invalid("request ID must be 1..=128 bytes without controls"));
+        }
+        if guards.len() > 1000 {
+            return Err(invalid("too many revision guards"));
+        }
+        self.run_commands(commands, Some(request_id), false, guards, false)
+    }
+
+    /// Apply only within the selected existing entities, including implicit cascade
+    /// edits. New dependent entities created after proposal validation are rejected.
+    pub fn execute_idempotent_scoped(
+        &mut self,
+        request_id: &str,
+        commands: Vec<Command>,
+        guards: &[(EntityId, u64)],
+    ) -> Result<Vec<Outcome>> {
+        if request_id.is_empty()
+            || request_id.len() > 128
+            || request_id.chars().any(char::is_control)
+        {
+            return Err(invalid("request ID must be 1..=128 bytes without controls"));
+        }
+        self.run_commands(commands, Some(request_id), false, guards, true)
+    }
+    pub fn preview_batch_scoped(
+        &mut self,
+        commands: Vec<Command>,
+        guards: &[(EntityId, u64)],
+    ) -> Result<Vec<Outcome>> {
+        self.run_commands(commands, None, true, guards, true)
+    }
+
+    fn run_commands(
+        &mut self,
+        commands: Vec<Command>,
+        request_id: Option<&str>,
+        preview: bool,
+        guards: &[(EntityId, u64)],
+        scoped: bool,
+    ) -> Result<Vec<Outcome>> {
+        if guards.len() > 1000 {
+            return Err(invalid("too many revision guards"));
+        }
+        if commands.is_empty() || commands.len() > 1000 {
+            return Err(invalid("batch must contain 1..=1000 commands"));
+        }
+        let commands_json = serde_json::to_string(&(&commands, guards, scoped))?;
+        if commands_json.len() > 4 * 1024 * 1024 {
+            return Err(invalid("command batch exceeds 4 MiB"));
+        }
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let (before, after, outcome) = apply_command(&tx, command)?;
-        check_relations(&tx, &after, false)?;
-        for snapshot in &after {
-            storage::put(&tx, snapshot)?;
-            storage::set_guard(&tx, &self.actor, snapshot)?;
+        if let Some(id) = request_id {
+            let saved: Option<(String,String)> = tx.query_row("SELECT commands_json,outcomes_json FROM requests WHERE actor=?1 AND request_id=?2",params![self.actor,id],|row|Ok((row.get(0)?,row.get(1)?))).optional()?;
+            if let Some((prior, outcomes)) = saved {
+                if prior != commands_json {
+                    return Err(invalid(
+                        "request ID was already used with different commands",
+                    ));
+                }
+                return Ok(serde_json::from_str(&outcomes)?);
+            }
         }
-        // A fresh action starts a new history branch for this actor only.
-        tx.execute(
-            "DELETE FROM operations WHERE actor=?1 AND undone=1",
-            [&self.actor],
-        )?;
-        tx.execute(
-            "INSERT INTO operations(actor,before_json,after_json) VALUES(?1,?2,?3)",
-            params![
-                self.actor,
-                serde_json::to_string(&before)?,
-                serde_json::to_string(&after)?
-            ],
-        )?;
-        tx.execute("DELETE FROM operations WHERE actor=?1 AND seq NOT IN (SELECT seq FROM operations WHERE actor=?1 ORDER BY seq DESC LIMIT ?2)",params![self.actor,storage::HISTORY_LIMIT])?;
+        for (id, revision) in guards {
+            checked(&tx, id.clone(), *revision)?;
+        }
+        let mut before = Vec::<Snapshot>::new();
+        let mut after = Vec::<Snapshot>::new();
+        let mut positions = HashMap::<EntityId, usize>::new();
+        let mut outcomes = Vec::new();
+        let allowed: HashSet<_> = guards.iter().map(|(id, _)| id.clone()).collect();
+        let mut created = HashSet::new();
+        for command in commands {
+            let (old, new, outcome) = apply_command(&tx, command)?;
+            for value in &old {
+                if value.revision() == 0 {
+                    created.insert(value.id());
+                } else if scoped
+                    && !value.deleted
+                    && !created.contains(&value.id())
+                    && !allowed.contains(&value.id())
+                {
+                    return Err(invalid(
+                        "operation would change an existing entity outside the selected scope",
+                    ));
+                }
+            }
+            check_relations(&tx, &new, false)?;
+            for (old, new) in old.into_iter().zip(new) {
+                validate_snapshot(&new)?;
+                storage::put(&tx, &new)?;
+                if let Some(index) = positions.get(&new.id()).copied() {
+                    after[index] = new;
+                } else {
+                    positions.insert(new.id(), before.len());
+                    before.push(old);
+                    after.push(new);
+                }
+            }
+            outcomes.push(outcome);
+        }
+        write_history(&tx, &self.actor, &before, &after)?;
+        if let Some(id) = request_id {
+            tx.execute("INSERT INTO requests(actor,request_id,commands_json,outcomes_json) VALUES(?1,?2,?3,?4)",params![self.actor,id,commands_json,serde_json::to_string(&outcomes)?])?;
+        }
+        if preview {
+            tx.rollback()?;
+        } else {
+            tx.commit()?;
+        }
+        Ok(outcomes)
+    }
+
+    pub fn snapshots(&self) -> Result<Vec<Snapshot>> {
+        let tx = self.connection.unchecked_transaction()?;
+        let snapshots = storage::all_snapshots(&tx)?;
         tx.commit()?;
-        Ok(outcome)
+        Ok(snapshots)
+    }
+
+    pub fn calendar(&self, id: CalendarId) -> Result<Calendar> {
+        match storage::active(&self.connection, &EntityId::Calendar(id))?.entity {
+            Entity::Calendar(v) => Ok(v),
+            _ => unreachable!(),
+        }
+    }
+    pub fn calendars(&self, count: u32) -> Result<Vec<Calendar>> {
+        limit(count)?;
+        let mut statement = self
+            .connection
+            .prepare("SELECT id FROM calendars WHERE deleted=0 ORDER BY id LIMIT ?1")?;
+        let ids = statement
+            .query_map([count], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        ids.into_iter()
+            .map(|id| {
+                self.calendar(
+                    id.parse()
+                        .map_err(|_| invalid("invalid stored calendar ID"))?,
+                )
+            })
+            .collect()
+    }
+    pub fn reminder(&self, id: ReminderId) -> Result<Reminder> {
+        match storage::active(&self.connection, &EntityId::Reminder(id))?.entity {
+            Entity::Reminder(v) => Ok(v),
+            _ => unreachable!(),
+        }
+    }
+    pub fn reminders(&self, count: u32) -> Result<Vec<Reminder>> {
+        self.reminders_page(count, 0)
+    }
+    pub fn reminders_page(&self, count: u32, offset: u32) -> Result<Vec<Reminder>> {
+        limit(count)?;
+        let mut statement = self.connection.prepare(
+            "SELECT data_json FROM reminders WHERE deleted=0 ORDER BY id LIMIT ?1 OFFSET ?2",
+        )?;
+        let values = statement
+            .query_map(params![count, offset], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        values
+            .into_iter()
+            .map(|value| Ok(serde_json::from_str(&value)?))
+            .collect()
+    }
+    pub fn event_occurrences(
+        &self,
+        query: &CalendarQuery,
+        calendar_id: Option<CalendarId>,
+    ) -> Result<Vec<EventOccurrence>> {
+        let (date_start, date_end) = calendar_window(query)?;
+        let mut statement = self.connection.prepare("SELECT id,title,schedule_json,revision,calendar_id,recurrence_json,exceptions_json FROM events WHERE deleted=0 AND (?1 IS NULL OR calendar_id=?1) AND (recurrence_json IS NOT NULL OR (start_utc<?3 AND end_utc>?2) OR (start_date<?5 AND end_date>?4)) ORDER BY id")?;
+        let events = statement
+            .query_map(
+                params![
+                    calendar_id.map(|id| id.to_string()),
+                    storage::timestamp(query.start),
+                    storage::timestamp(query.end),
+                    date_start.to_string(),
+                    date_end.to_string()
+                ],
+                storage::read_event,
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut result = Vec::new();
+        for event in events {
+            result.extend(crate::recurrence::expand_event(&event, query)?);
+            if result.len() > query.limit as usize {
+                return Err(invalid("occurrence query exceeds limit"));
+            }
+        }
+        result.sort_by_key(|v| match &v.schedule {
+            EventSchedule::Timed { start, .. } => *start,
+            EventSchedule::AllDay { start, .. } => start.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+        });
+        Ok(result)
+    }
+    pub fn task_occurrences(&self, query: &CalendarQuery) -> Result<Vec<TaskOccurrence>> {
+        calendar_window(query)?;
+        let mut statement = self.connection.prepare("SELECT id,title,completed,due_json,list_id,revision,recurrence_json,exceptions_json FROM tasks WHERE deleted=0 AND due_json IS NOT NULL ORDER BY id")?;
+        let tasks = statement
+            .query_map([], storage::read_task)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut result = Vec::new();
+        for task in tasks {
+            result.extend(crate::recurrence::expand_task(&task, query)?);
+            if result.len() > query.limit as usize {
+                return Err(invalid("occurrence query exceeds limit"));
+            }
+        }
+        result.sort_by_key(|v| match &v.due {
+            DueDate::At { at, .. } => *at,
+            DueDate::Date(date) => date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+        });
+        Ok(result)
+    }
+    /// Filter before pagination. A date-only deadline is overdue only after its
+    /// local calendar day has ended; its timezone comes explicitly from the query.
+    pub fn tasks_due(&self, query: &TaskQuery, filter: &DueFilter) -> Result<Vec<Task>> {
+        // Every internal page must observe the same committed database state.
+        let _read_transaction = self.connection.unchecked_transaction()?;
+        limit(query.limit)?;
+        let (start, end, zone) = match filter {
+            DueFilter::None => (None, None, None),
+            DueFilter::Range {
+                start,
+                end,
+                timezone: zone,
+            } => {
+                timed_range(*start, *end, zone)?;
+                (Some(*start), Some(*end), Some(timezone(zone)?))
+            }
+            DueFilter::Before { at, timezone: zone } => {
+                let zone = timezone(zone)?;
+                instant(*at, zone)?;
+                (None, Some(*at), Some(zone))
+            }
+        };
+        let mut scan = query.clone();
+        scan.limit = 1000;
+        scan.offset = 0;
+        let mut matched = 0u32;
+        let mut result = Vec::new();
+        loop {
+            let page = self.tasks(&scan)?;
+            let count = page.len();
+            for task in page {
+                let matches = match (&task.due, filter) {
+                    (None, DueFilter::None) => true,
+                    (Some(DueDate::At { at, .. }), _) => {
+                        end.is_some_and(|end| *at < end) && start.is_none_or(|start| *at >= start)
+                    }
+                    (Some(DueDate::Date(date)), DueFilter::Before { .. }) => end
+                        .zip(zone)
+                        .is_some_and(|(end, zone)| *date < end.with_timezone(&zone).date_naive()),
+                    (Some(DueDate::Date(date)), DueFilter::Range { .. }) => {
+                        let (start, end, zone) = (start.unwrap(), end.unwrap(), zone.unwrap());
+                        let local_end = end.with_timezone(&zone);
+                        let date_end = if local_end.time() == NaiveTime::MIN {
+                            local_end.date_naive()
+                        } else {
+                            local_end
+                                .date_naive()
+                                .succ_opt()
+                                .ok_or_else(|| invalid("due range date overflow"))?
+                        };
+                        *date >= start.with_timezone(&zone).date_naive() && *date < date_end
+                    }
+                    _ => false,
+                };
+                if matches {
+                    if matched >= query.offset {
+                        result.push(task);
+                        if result.len() == query.limit as usize {
+                            return Ok(result);
+                        }
+                    }
+                    matched = matched
+                        .checked_add(1)
+                        .ok_or_else(|| invalid("task result offset overflow"))?;
+                }
+            }
+            if count < 1000 {
+                break;
+            }
+            scan.offset = scan
+                .offset
+                .checked_add(1000)
+                .ok_or_else(|| invalid("task scan offset overflow"))?;
+        }
+        Ok(result)
     }
 
     pub fn task(&self, id: TaskId) -> Result<Task> {
@@ -129,7 +452,7 @@ impl Engine {
         {
             return Err(invalid("search is too long"));
         }
-        let mut statement=self.connection.prepare_cached("SELECT id,title,completed,due_json,list_id,revision FROM tasks WHERE deleted=0 AND (?1 IS NULL OR instr(lower(title),lower(?1))>0) AND (?2 IS NULL OR completed=?2) AND (?3 IS NULL OR list_id=?3) ORDER BY id LIMIT ?4 OFFSET ?5")?;
+        let mut statement=self.connection.prepare_cached("SELECT id,title,completed,due_json,list_id,revision,recurrence_json,exceptions_json FROM tasks WHERE deleted=0 AND (?1 IS NULL OR instr(lower(title),lower(?1))>0) AND (?2 IS NULL OR completed=?2) AND (?3 IS NULL OR list_id=?3) ORDER BY id LIMIT ?4 OFFSET ?5")?;
         let rows = statement.query_map(
             params![
                 query.search,
@@ -154,7 +477,7 @@ impl Engine {
 
     pub fn events(&self, query: &CalendarQuery) -> Result<Vec<Event>> {
         let (date_start, date_end) = calendar_window(query)?;
-        let mut statement=self.connection.prepare_cached("SELECT id,title,schedule_json,revision FROM events WHERE deleted=0 AND ((start_utc<?2 AND end_utc>?1) OR (start_date<?4 AND end_date>?3)) ORDER BY COALESCE(start_utc,start_date),id LIMIT ?5")?;
+        let mut statement=self.connection.prepare_cached("SELECT id,title,schedule_json,revision,calendar_id,recurrence_json,exceptions_json FROM events WHERE deleted=0 AND ((start_utc<?2 AND end_utc>?1) OR (start_date<?4 AND end_date>?3)) ORDER BY COALESCE(start_utc,start_date),id LIMIT ?5")?;
         let rows = statement.query_map(
             params![
                 storage::timestamp(query.start),
@@ -238,6 +561,7 @@ impl Engine {
         }
         check_relations(&tx, &desired, true)?;
         for snapshot in &desired {
+            validate_snapshot(snapshot)?;
             storage::put(&tx, snapshot)?;
             storage::set_guard(&tx, &self.actor, snapshot)?;
         }
@@ -248,6 +572,7 @@ impl Engine {
         };
         tx.execute(sql, params![seq, serde_json::to_string(&desired)?])?;
         rebase_history_boundary(&tx, &self.actor, seq, redo, &original_boundary, &desired)?;
+        crate::sync::record_local_change(&tx, &expected, &desired)?;
         tx.commit()?;
         Ok(desired.iter().map(Snapshot::id).collect())
     }
@@ -380,7 +705,7 @@ fn schedule(value: &EventSchedule) -> Result<()> {
         }
     }
 }
-fn calendar_window(query: &CalendarQuery) -> Result<(NaiveDate, NaiveDate)> {
+pub(crate) fn calendar_window(query: &CalendarQuery) -> Result<(NaiveDate, NaiveDate)> {
     limit(query.limit)?;
     timed_range(query.start, query.end, &query.timezone)?;
     if query.end - query.start > chrono::Duration::days(366) {
@@ -439,6 +764,8 @@ fn updated(
 }
 fn outcome(entity: &Entity) -> Outcome {
     match entity {
+        Entity::Calendar(v) => Outcome::Calendar(v.clone()),
+        Entity::Reminder(v) => Outcome::Reminder(v.clone()),
         Entity::Task(v) => Outcome::Task(v.clone()),
         Entity::List(v) => Outcome::List(v.clone()),
         Entity::Event(v) => Outcome::Event(v.clone()),
@@ -451,6 +778,154 @@ fn apply_command(
     command: Command,
 ) -> Result<(Vec<Snapshot>, Vec<Snapshot>, Outcome)> {
     match command {
+        Command::CreateCalendar { title: value } => {
+            let v = Calendar {
+                id: CalendarId::new(),
+                title: title(value)?,
+                revision: 1,
+            };
+            Ok(created(Entity::Calendar(v.clone()), Outcome::Calendar(v)))
+        }
+        Command::RenameCalendar {
+            id,
+            expected_revision,
+            title: value,
+        } => {
+            let before = checked(connection, EntityId::Calendar(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Calendar(v) = &mut after.entity {
+                v.title = title(value)?;
+            }
+            updated(before, after, outcome)
+        }
+        Command::DeleteCalendar {
+            id,
+            expected_revision,
+        } => {
+            let before = checked(connection, EntityId::Calendar(id), expected_revision)?;
+            let mut after = before.clone();
+            after.deleted = true;
+            updated(before, after, |_| Outcome::Deleted(EntityId::Calendar(id)))
+        }
+        Command::AssignEventCalendar {
+            id,
+            expected_revision,
+            calendar_id,
+        } => {
+            let before = checked(connection, EntityId::Event(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Event(v) = &mut after.entity {
+                v.calendar_id = calendar_id;
+            }
+            updated(before, after, outcome)
+        }
+        Command::SetEventRecurrence {
+            id,
+            expected_revision,
+            recurrence,
+        } => {
+            let before = checked(connection, EntityId::Event(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Event(v) = &mut after.entity {
+                if !v.exceptions.is_empty() && v.recurrence != recurrence {
+                    return Err(invalid(
+                        "clear exceptions before changing a recurrence rule",
+                    ));
+                }
+                v.recurrence = recurrence;
+            }
+            updated(before, after, outcome)
+        }
+        Command::SetEventException {
+            id,
+            expected_revision,
+            date,
+            exception,
+        } => {
+            let before = checked(connection, EntityId::Event(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Event(v) = &mut after.entity {
+                if let Some(mut exception) = exception {
+                    if let EventException::Override { title: value, .. } = &mut exception {
+                        *value = value.take().map(title).transpose()?;
+                    }
+                    v.exceptions.insert(date, exception);
+                } else {
+                    v.exceptions.remove(&date);
+                }
+            }
+            updated(before, after, outcome)
+        }
+        Command::SetTaskRecurrence {
+            id,
+            expected_revision,
+            recurrence,
+        } => {
+            let before = checked(connection, EntityId::Task(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Task(v) = &mut after.entity {
+                if !v.exceptions.is_empty() && v.recurrence != recurrence {
+                    return Err(invalid(
+                        "clear exceptions before changing a recurrence rule",
+                    ));
+                }
+                v.recurrence = recurrence;
+            }
+            updated(before, after, outcome)
+        }
+        Command::SetTaskException {
+            id,
+            expected_revision,
+            date,
+            exception,
+        } => {
+            let before = checked(connection, EntityId::Task(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Task(v) = &mut after.entity {
+                if let Some(mut exception) = exception {
+                    if let TaskException::Override { title: value, .. } = &mut exception {
+                        *value = value.take().map(title).transpose()?;
+                    }
+                    v.exceptions.insert(date, exception);
+                } else {
+                    v.exceptions.remove(&date);
+                }
+            }
+            updated(before, after, outcome)
+        }
+        Command::CreateReminder { target, trigger } => {
+            let v = Reminder {
+                id: ReminderId::new(),
+                target,
+                trigger,
+                enabled: true,
+                revision: 1,
+            };
+            Ok(created(Entity::Reminder(v.clone()), Outcome::Reminder(v)))
+        }
+        Command::UpdateReminder {
+            id,
+            expected_revision,
+            trigger,
+            enabled,
+        } => {
+            let before = checked(connection, EntityId::Reminder(id), expected_revision)?;
+            let mut after = before.clone();
+            if let Entity::Reminder(v) = &mut after.entity {
+                v.trigger = trigger;
+                v.enabled = enabled;
+            }
+            updated(before, after, outcome)
+        }
+        Command::DeleteReminder {
+            id,
+            expected_revision,
+        } => {
+            let before = checked(connection, EntityId::Reminder(id), expected_revision)?;
+            let mut after = before.clone();
+            after.deleted = true;
+            updated(before, after, |_| Outcome::Deleted(EntityId::Reminder(id)))
+        }
         Command::CreateList { title: value } => {
             let v = TaskList {
                 id: ListId::new(),
@@ -495,6 +970,8 @@ fn apply_command(
                 completed: false,
                 due: value_due,
                 list_id,
+                recurrence: None,
+                exceptions: Default::default(),
                 revision: 1,
             };
             Ok(created(Entity::Task(v.clone()), Outcome::Task(v)))
@@ -509,17 +986,18 @@ fn apply_command(
         } => {
             let before = checked(connection, EntityId::Task(id), expected_revision)?;
             due(&value_due)?;
-            let after = Snapshot {
-                entity: Entity::Task(Task {
-                    id,
-                    title: title(value)?,
-                    completed,
-                    due: value_due,
-                    list_id,
-                    revision: 0,
-                }),
-                deleted: false,
-            };
+            let mut after = before.clone();
+            if let Entity::Task(v) = &mut after.entity {
+                if v.due != value_due && !v.exceptions.is_empty() {
+                    return Err(invalid(
+                        "clear occurrence exceptions before changing the series anchor",
+                    ));
+                }
+                v.title = title(value)?;
+                v.completed = completed;
+                v.due = value_due;
+                v.list_id = list_id;
+            }
             updated(before, after, outcome)
         }
         Command::SetTaskCompleted {
@@ -541,6 +1019,8 @@ fn apply_command(
             let task = checked(connection, EntityId::Task(id), expected_revision)?;
             let mut before = vec![task];
             before.extend(storage::task_blocks(connection, id)?);
+            let targets: Vec<_> = before.iter().map(Snapshot::id).collect();
+            before.extend(target_reminders(connection, &targets)?);
             let mut after = before.clone();
             for v in &mut after {
                 v.deleted = true;
@@ -557,6 +1037,9 @@ fn apply_command(
                 id: EventId::new(),
                 title: title(value)?,
                 schedule: value_schedule,
+                calendar_id: None,
+                recurrence: None,
+                exceptions: Default::default(),
                 revision: 1,
             };
             Ok(created(Entity::Event(v.clone()), Outcome::Event(v)))
@@ -569,15 +1052,16 @@ fn apply_command(
         } => {
             let before = checked(connection, EntityId::Event(id), expected_revision)?;
             schedule(&value_schedule)?;
-            let after = Snapshot {
-                entity: Entity::Event(Event {
-                    id,
-                    title: title(value)?,
-                    schedule: value_schedule,
-                    revision: 0,
-                }),
-                deleted: false,
-            };
+            let mut after = before.clone();
+            if let Entity::Event(v) = &mut after.entity {
+                if v.schedule != value_schedule && !v.exceptions.is_empty() {
+                    return Err(invalid(
+                        "clear occurrence exceptions before changing the series anchor",
+                    ));
+                }
+                v.title = title(value)?;
+                v.schedule = value_schedule;
+            }
             updated(before, after, outcome)
         }
         Command::DeleteEvent {
@@ -585,9 +1069,7 @@ fn apply_command(
             expected_revision,
         } => {
             let before = checked(connection, EntityId::Event(id), expected_revision)?;
-            let mut after = before.clone();
-            after.deleted = true;
-            updated(before, after, |_| Outcome::Deleted(EntityId::Event(id)))
+            deleted_with_reminders(connection, before, EntityId::Event(id))
         }
         Command::ScheduleTask {
             task_id,
@@ -630,16 +1112,18 @@ fn apply_command(
             expected_revision,
         } => {
             let before = checked(connection, EntityId::TimeBlock(id), expected_revision)?;
-            let mut after = before.clone();
-            after.deleted = true;
-            updated(before, after, |_| Outcome::Deleted(EntityId::TimeBlock(id)))
+            deleted_with_reminders(connection, before, EntityId::TimeBlock(id))
         }
     }
 }
 
 /// Validate the final relation graph before applying any row. This also protects undo
 /// from deleting a parent that gained a child in another actor's history stream.
-fn check_relations(connection: &Connection, targets: &[Snapshot], history: bool) -> Result<()> {
+pub(crate) fn check_relations(
+    connection: &Connection,
+    targets: &[Snapshot],
+    history: bool,
+) -> Result<()> {
     let target_map: HashMap<EntityId, &Snapshot> = targets.iter().map(|v| (v.id(), v)).collect();
     let is_active = |id: &EntityId| -> Result<bool> {
         if let Some(value) = target_map.get(id) {
@@ -654,20 +1138,62 @@ fn check_relations(connection: &Connection, targets: &[Snapshot], history: bool)
             Error::NotFound(id)
         }
     };
+    // Load reminder reverse edges once per graph validation, rather than scanning
+    // all reminders again for each deleted entity in a backup/import/cascade.
+    let deleted_targets: HashSet<_> = targets
+        .iter()
+        .filter(|v| {
+            v.deleted
+                && matches!(
+                    v.entity,
+                    Entity::Task(_) | Entity::Event(_) | Entity::TimeBlock(_)
+                )
+        })
+        .map(Snapshot::id)
+        .collect();
+    let mut reminder_dependents = HashMap::<EntityId, Vec<EntityId>>::new();
+    if !deleted_targets.is_empty() {
+        let mut statement =
+            connection.prepare("SELECT data_json FROM reminders WHERE deleted=0")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        for row in rows {
+            let reminder: Reminder = serde_json::from_str(&row?)?;
+            if deleted_targets.contains(&reminder.target) {
+                reminder_dependents
+                    .entry(reminder.target)
+                    .or_default()
+                    .push(EntityId::Reminder(reminder.id));
+            }
+        }
+    }
     for value in targets {
-        match &value.entity {
-            Entity::Task(task) if !value.deleted => {
-                if let Some(list) = task.list_id {
-                    let id = EntityId::List(list);
-                    if !is_active(&id)? {
-                        return Err(relation_error(id));
-                    }
+        for dependency in snapshot_dependencies(value) {
+            if !is_active(&dependency)? {
+                return Err(relation_error(dependency));
+            }
+        }
+        if value.deleted
+            && let Some(reminders) = reminder_dependents.get(&value.id())
+        {
+            for reminder in reminders {
+                if is_active(reminder)? {
+                    return Err(relation_error(value.id()));
                 }
             }
-            Entity::TimeBlock(block) if !value.deleted => {
-                let id = EntityId::Task(block.task_id);
-                if !is_active(&id)? {
-                    return Err(relation_error(id));
+        }
+        match &value.entity {
+            Entity::Calendar(calendar) if value.deleted => {
+                let mut statement = connection
+                    .prepare("SELECT id FROM events WHERE calendar_id=?1 AND deleted=0")?;
+                let ids = statement
+                    .query_map([calendar.id.to_string()], |row| row.get::<_, String>(0))?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                for id in ids {
+                    if is_active(&EntityId::Event(
+                        id.parse().map_err(|_| invalid("invalid stored event ID"))?,
+                    ))? {
+                        return Err(relation_error(value.id()));
+                    }
                 }
             }
             Entity::Task(task) if value.deleted => {
@@ -700,4 +1226,190 @@ fn check_relations(connection: &Connection, targets: &[Snapshot], history: bool)
         }
     }
     Ok(())
+}
+
+/// Shared durable history path for commands and imports. Caller owns the transaction.
+pub(crate) fn write_history(
+    connection: &Connection,
+    actor: &str,
+    before: &[Snapshot],
+    after: &[Snapshot],
+) -> Result<()> {
+    crate::sync::record_local_change(connection, before, after)?;
+    for snapshot in after {
+        storage::set_guard(connection, actor, snapshot)?;
+    }
+    connection.execute(
+        "DELETE FROM operations WHERE actor=?1 AND undone=1",
+        [actor],
+    )?;
+    connection.execute(
+        "INSERT INTO operations(actor,before_json,after_json) VALUES(?1,?2,?3)",
+        params![
+            actor,
+            serde_json::to_string(before)?,
+            serde_json::to_string(after)?
+        ],
+    )?;
+    connection.execute("DELETE FROM operations WHERE actor=?1 AND seq NOT IN (SELECT seq FROM operations WHERE actor=?1 ORDER BY seq DESC LIMIT ?2)",params![actor,storage::HISTORY_LIMIT])?;
+    Ok(())
+}
+
+pub(crate) fn snapshot_dependencies(snapshot: &Snapshot) -> Vec<EntityId> {
+    if snapshot.deleted {
+        return Vec::new();
+    }
+    match &snapshot.entity {
+        Entity::Task(v) => v.list_id.map(EntityId::List).into_iter().collect(),
+        Entity::Event(v) => v.calendar_id.map(EntityId::Calendar).into_iter().collect(),
+        Entity::TimeBlock(v) => vec![EntityId::Task(v.task_id)],
+        Entity::Reminder(v) => vec![v.target.clone()],
+        _ => Vec::new(),
+    }
+}
+
+pub(crate) fn validate_snapshot(snapshot: &Snapshot) -> Result<()> {
+    if snapshot.revision() == 0 || snapshot.revision() > i64::MAX as u64 {
+        return Err(invalid("entity revision must be 1..=i64::MAX"));
+    }
+    let uuid = match snapshot.id() {
+        EntityId::Task(v) => v.0,
+        EntityId::List(v) => v.0,
+        EntityId::Event(v) => v.0,
+        EntityId::TimeBlock(v) => v.0,
+        EntityId::Calendar(v) => v.0,
+        EntityId::Reminder(v) => v.0,
+    };
+    if uuid.is_nil() {
+        return Err(invalid("entity ID must not be nil"));
+    }
+    let validate_title = |value: &str| -> Result<()> {
+        if title(value.to_owned())? != value {
+            return Err(invalid("stored title must be trimmed"));
+        }
+        Ok(())
+    };
+    match &snapshot.entity {
+        Entity::List(v) => validate_title(&v.title)?,
+        Entity::Calendar(v) => validate_title(&v.title)?,
+        Entity::TimeBlock(v) => timed_range(v.start, v.end, &v.timezone)?,
+        Entity::Reminder(v) => {
+            if !matches!(
+                v.target,
+                EntityId::Task(_) | EntityId::Event(_) | EntityId::TimeBlock(_)
+            ) {
+                return Err(invalid(
+                    "reminder target must be a task, event or time block",
+                ));
+            }
+            match v.trigger {
+                ReminderTrigger::At(at) => instant(at, chrono_tz::UTC)?,
+                ReminderTrigger::Before { minutes } if minutes > 525600 => {
+                    return Err(invalid("reminder offset must not exceed one year"));
+                }
+                _ => {}
+            }
+        }
+        Entity::Task(v) => {
+            validate_title(&v.title)?;
+            due(&v.due)?;
+            if v.exceptions.len() > 1000 {
+                return Err(invalid(
+                    "a series supports at most 1000 explicit exceptions",
+                ));
+            }
+            match (&v.recurrence, &v.due) {
+                (Some(rule), Some(due)) => {
+                    let anchor = crate::recurrence::due_anchor(due)?;
+                    crate::recurrence::validate(rule, anchor)?;
+                    crate::recurrence::validate_exception_dates(
+                        anchor,
+                        rule,
+                        &v.exceptions.keys().copied().collect::<Vec<_>>(),
+                        |date| crate::recurrence::due_at(due, date).is_some(),
+                    )?;
+                    for exception in v.exceptions.values() {
+                        if let TaskException::Override { title, due, .. } = exception {
+                            if let Some(value) = title {
+                                validate_title(value)?;
+                            }
+                            self::due(&Some(due.clone()))?;
+                        }
+                    }
+                }
+                (Some(_), None) => return Err(invalid("recurring tasks require a due date")),
+                (None, _) if !v.exceptions.is_empty() => {
+                    return Err(invalid("exceptions require a recurrence rule"));
+                }
+                _ => {}
+            }
+        }
+        Entity::Event(v) => {
+            validate_title(&v.title)?;
+            schedule(&v.schedule)?;
+            if v.exceptions.len() > 1000 {
+                return Err(invalid(
+                    "a series supports at most 1000 explicit exceptions",
+                ));
+            }
+            if let Some(rule) = &v.recurrence {
+                let anchor = crate::recurrence::event_anchor(&v.schedule)?;
+                crate::recurrence::validate(rule, anchor)?;
+                crate::recurrence::validate_exception_dates(
+                    anchor,
+                    rule,
+                    &v.exceptions.keys().copied().collect::<Vec<_>>(),
+                    |date| crate::recurrence::event_at(&v.schedule, date).is_some(),
+                )?;
+                for exception in v.exceptions.values() {
+                    if let EventException::Override {
+                        title,
+                        schedule: value,
+                    } = exception
+                    {
+                        if let Some(value) = title {
+                            validate_title(value)?;
+                        }
+                        schedule(value)?;
+                    }
+                }
+            } else if !v.exceptions.is_empty() {
+                return Err(invalid("exceptions require a recurrence rule"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn target_reminders(connection: &Connection, targets: &[EntityId]) -> Result<Vec<Snapshot>> {
+    let targets: HashSet<_> = targets.iter().collect();
+    let mut statement = connection.prepare("SELECT data_json FROM reminders WHERE deleted=0")?;
+    let json = statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut result = Vec::new();
+    for value in json {
+        let reminder: Reminder = serde_json::from_str(&value)?;
+        if targets.contains(&reminder.target) {
+            result.push(Snapshot {
+                entity: Entity::Reminder(reminder),
+                deleted: false,
+            });
+        }
+    }
+    Ok(result)
+}
+fn deleted_with_reminders(
+    connection: &Connection,
+    value: Snapshot,
+    id: EntityId,
+) -> Result<(Vec<Snapshot>, Vec<Snapshot>, Outcome)> {
+    let mut before = vec![value];
+    before.extend(target_reminders(connection, std::slice::from_ref(&id))?);
+    let mut after = before.clone();
+    for value in &mut after {
+        value.deleted = true;
+        value.set_revision(next_revision(value.revision())?);
+    }
+    Ok((before, after, Outcome::Deleted(id)))
 }

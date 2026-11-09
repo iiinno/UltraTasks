@@ -1,6 +1,15 @@
 [workspace]
-members = ["crates/ultratasks-core", "apps/desktop"]
-default-members = ["crates/ultratasks-core"]
+members = [
+    "crates/ultratasks-core",
+    "crates/ultratasks-notifications",
+    "crates/ultratasks-sync",
+    "crates/ultratasks-ai",
+    "apps/desktop",
+    "apps/automation",
+    "apps/android/native",
+    "apps/server",
+]
+default-members = ["crates/ultratasks-core", "crates/ultratasks-notifications", "crates/ultratasks-sync", "apps/automation", "apps/server"]
 resolver = "3"
 
 [workspace.package]

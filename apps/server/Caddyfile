@@ -1,0 +1,3 @@
+{$ULTRATASKS_DOMAIN} {
+    reverse_proxy ultratasks:8374
+}

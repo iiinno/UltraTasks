@@ -1,0 +1,20 @@
+[package]
+name = "ultratasks-automation"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+ultratasks-core = { path = "../../crates/ultratasks-core" }
+ultratasks-ai = { path = "../../crates/ultratasks-ai" }
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+rmcp = { version = "=3.9.0", default-features = false, features = ["server", "transport-io"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "process", "time", "net"] }
+tempfile = "3"
+
+[lints]
+workspace = true

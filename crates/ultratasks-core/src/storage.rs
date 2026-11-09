@@ -1,5 +1,5 @@
 use crate::{
-    EntityId, Event, EventSchedule, ListId, Task, TaskList, TimeBlock,
+    Calendar, EntityId, Event, EventSchedule, ListId, Reminder, Task, TaskList, TimeBlock,
     engine::{Error, Result},
 };
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -9,10 +9,13 @@ use std::time::Duration;
 
 pub(crate) const HISTORY_LIMIT: u32 = 1000;
 const APPLICATION_ID: i64 = 0x5554_4b53;
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum Entity {
+#[serde(deny_unknown_fields)]
+pub enum Entity {
+    Calendar(Calendar),
+    Reminder(Reminder),
     Task(Task),
     List(TaskList),
     Event(Event),
@@ -20,7 +23,8 @@ pub(crate) enum Entity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Snapshot {
+#[serde(deny_unknown_fields)]
+pub struct Snapshot {
     pub entity: Entity,
     pub deleted: bool,
 }
@@ -28,6 +32,8 @@ pub(crate) struct Snapshot {
 impl Snapshot {
     pub fn id(&self) -> EntityId {
         match &self.entity {
+            Entity::Calendar(v) => EntityId::Calendar(v.id),
+            Entity::Reminder(v) => EntityId::Reminder(v.id),
             Entity::Task(v) => EntityId::Task(v.id),
             Entity::List(v) => EntityId::List(v.id),
             Entity::Event(v) => EntityId::Event(v.id),
@@ -36,6 +42,8 @@ impl Snapshot {
     }
     pub fn revision(&self) -> u64 {
         match &self.entity {
+            Entity::Calendar(v) => v.revision,
+            Entity::Reminder(v) => v.revision,
             Entity::Task(v) => v.revision,
             Entity::List(v) => v.revision,
             Entity::Event(v) => v.revision,
@@ -44,6 +52,8 @@ impl Snapshot {
     }
     pub fn set_revision(&mut self, revision: u64) {
         match &mut self.entity {
+            Entity::Calendar(v) => v.revision = revision,
+            Entity::Reminder(v) => v.revision = revision,
             Entity::Task(v) => v.revision = revision,
             Entity::List(v) => v.revision = revision,
             Entity::Event(v) => v.revision = revision,
@@ -61,6 +71,8 @@ impl Snapshot {
 
 pub(crate) fn key(id: &EntityId) -> (&'static str, String) {
     match id {
+        EntityId::Calendar(v) => ("calendar", v.to_string()),
+        EntityId::Reminder(v) => ("reminder", v.to_string()),
         EntityId::Task(v) => ("task", v.to_string()),
         EntityId::List(v) => ("list", v.to_string()),
         EntityId::Event(v) => ("event", v.to_string()),
@@ -148,6 +160,49 @@ pub(crate) fn initialize(connection: &mut Connection) -> Result<()> {
         // order while filtering live rows, avoiding a sort of every matching task.
         tx.execute_batch("CREATE INDEX tasks_order ON tasks(deleted,id); PRAGMA user_version=2;")?;
     }
+    if version < 3 {
+        // Column detection also makes recovery from an interrupted/older migration
+        // fixture safe; all schema changes still commit atomically.
+        for (table, column, definition) in [
+            ("tasks", "recurrence_json", "TEXT"),
+            ("tasks", "exceptions_json", "TEXT NOT NULL DEFAULT '{}'"),
+            ("events", "calendar_id", "TEXT REFERENCES calendars(id)"),
+            ("events", "recurrence_json", "TEXT"),
+            ("events", "exceptions_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ] {
+            let exists: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?1) WHERE name=?2)",
+                params![table, column],
+                |r| r.get(0),
+            )?;
+            if !exists {
+                tx.execute_batch(&format!(
+                    "ALTER TABLE {table} ADD COLUMN {column} {definition}"
+                ))?;
+            }
+        }
+        tx.execute_batch("CREATE TABLE IF NOT EXISTS calendars (
+          id TEXT PRIMARY KEY, title TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), deleted INTEGER NOT NULL CHECK(deleted IN (0,1))
+        );
+        CREATE TABLE IF NOT EXISTS reminders (
+          id TEXT PRIMARY KEY, data_json TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), deleted INTEGER NOT NULL CHECK(deleted IN (0,1))
+        );
+        CREATE INDEX IF NOT EXISTS events_calendar ON events(calendar_id,deleted,id);
+        CREATE TABLE IF NOT EXISTS requests (
+          actor TEXT NOT NULL, request_id TEXT NOT NULL, commands_json TEXT NOT NULL, outcomes_json TEXT NOT NULL,
+          PRIMARY KEY(actor,request_id)
+        );
+        PRAGMA user_version=3;")?;
+    }
+    for sql in [
+        "SELECT recurrence_json,exceptions_json FROM tasks LIMIT 0",
+        "SELECT calendar_id,recurrence_json,exceptions_json FROM events LIMIT 0",
+        "SELECT id,title,revision,deleted FROM calendars LIMIT 0",
+        "SELECT id,data_json,revision,deleted FROM reminders LIMIT 0",
+        "SELECT actor,request_id,commands_json,outcomes_json FROM requests LIMIT 0",
+    ] {
+        tx.prepare(sql).map_err(|_| Error::UnrecognizedDatabase)?;
+    }
     tx.commit()?;
     // Journal conversion only happens after ownership/schema checks have succeeded.
     connection.pragma_update(None, "journal_mode", "WAL")?;
@@ -184,6 +239,8 @@ pub(crate) fn read_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         due: due.map(json).transpose()?,
         list_id: list.map(parse).transpose()?,
         revision: read_revision(row, 5)?,
+        recurrence: row.get::<_, Option<String>>(6)?.map(json).transpose()?,
+        exceptions: json(row.get(7)?)?,
     })
 }
 pub(crate) fn read_list(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskList> {
@@ -199,6 +256,9 @@ pub(crate) fn read_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<Event> {
         title: row.get(1)?,
         schedule: json(row.get(2)?)?,
         revision: read_revision(row, 3)?,
+        calendar_id: row.get::<_, Option<String>>(4)?.map(parse).transpose()?,
+        recurrence: row.get::<_, Option<String>>(5)?.map(json).transpose()?,
+        exceptions: json(row.get(6)?)?,
     })
 }
 pub(crate) fn read_block(row: &rusqlite::Row<'_>) -> rusqlite::Result<TimeBlock> {
@@ -215,9 +275,11 @@ pub(crate) fn read_block(row: &rusqlite::Row<'_>) -> rusqlite::Result<TimeBlock>
 pub(crate) fn get(connection: &Connection, id: &EntityId) -> Result<Option<Snapshot>> {
     let (_, id_string) = key(id);
     let value=match id {
-        EntityId::Task(_)=>connection.query_row("SELECT id,title,completed,due_json,list_id,revision,deleted FROM tasks WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::Task(read_task(row)?),deleted:row.get(6)?})).optional()?,
+        EntityId::Calendar(_)=>connection.query_row("SELECT id,title,revision,deleted FROM calendars WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::Calendar(Calendar{id:parse(row.get(0)?)?,title:row.get(1)?,revision:read_revision(row,2)?}),deleted:row.get(3)?})).optional()?,
+        EntityId::Reminder(_)=>connection.query_row("SELECT data_json,deleted FROM reminders WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::Reminder(json(row.get(0)?)?),deleted:row.get(1)?})).optional()?,
+        EntityId::Task(_)=>connection.query_row("SELECT id,title,completed,due_json,list_id,revision,recurrence_json,exceptions_json,deleted FROM tasks WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::Task(read_task(row)?),deleted:row.get(8)?})).optional()?,
         EntityId::List(_)=>connection.query_row("SELECT id,title,revision,deleted FROM task_lists WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::List(read_list(row)?),deleted:row.get(3)?})).optional()?,
-        EntityId::Event(_)=>connection.query_row("SELECT id,title,schedule_json,revision,deleted FROM events WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::Event(read_event(row)?),deleted:row.get(4)?})).optional()?,
+        EntityId::Event(_)=>connection.query_row("SELECT id,title,schedule_json,revision,calendar_id,recurrence_json,exceptions_json,deleted FROM events WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::Event(read_event(row)?),deleted:row.get(7)?})).optional()?,
         EntityId::TimeBlock(_)=>connection.query_row("SELECT id,task_id,start_utc,end_utc,timezone,revision,deleted FROM time_blocks WHERE id=?1",[id_string],|row|Ok(Snapshot{entity:Entity::TimeBlock(read_block(row)?),deleted:row.get(6)?})).optional()?,
     };
     Ok(value)
@@ -232,11 +294,17 @@ pub(crate) fn active(connection: &Connection, id: &EntityId) -> Result<Snapshot>
 pub(crate) fn put(connection: &Connection, snapshot: &Snapshot) -> Result<()> {
     let deleted = snapshot.deleted;
     match &snapshot.entity {
+        Entity::Calendar(v) => {
+            connection.execute("INSERT INTO calendars(id,title,revision,deleted) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET title=excluded.title,revision=excluded.revision,deleted=excluded.deleted",params![v.id.to_string(),v.title,sql_revision(v.revision)?,deleted])?;
+        }
+        Entity::Reminder(v) => {
+            connection.execute("INSERT INTO reminders(id,data_json,revision,deleted) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json,revision=excluded.revision,deleted=excluded.deleted",params![v.id.to_string(),serde_json::to_string(v)?,sql_revision(v.revision)?,deleted])?;
+        }
         Entity::List(v) => {
             connection.execute("INSERT INTO task_lists(id,title,revision,deleted) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET title=excluded.title,revision=excluded.revision,deleted=excluded.deleted",params![v.id.to_string(),v.title,sql_revision(v.revision)?,deleted])?;
         }
         Entity::Task(v) => {
-            connection.execute("INSERT INTO tasks(id,title,completed,due_json,list_id,revision,deleted) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET title=excluded.title,completed=excluded.completed,due_json=excluded.due_json,list_id=excluded.list_id,revision=excluded.revision,deleted=excluded.deleted",params![v.id.to_string(),v.title,v.completed,v.due.as_ref().map(serde_json::to_string).transpose()?,v.list_id.map(|id|id.to_string()),sql_revision(v.revision)?,deleted])?;
+            connection.execute("INSERT INTO tasks(id,title,completed,due_json,list_id,revision,deleted,recurrence_json,exceptions_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(id) DO UPDATE SET title=excluded.title,completed=excluded.completed,due_json=excluded.due_json,list_id=excluded.list_id,revision=excluded.revision,deleted=excluded.deleted,recurrence_json=excluded.recurrence_json,exceptions_json=excluded.exceptions_json",params![v.id.to_string(),v.title,v.completed,v.due.as_ref().map(serde_json::to_string).transpose()?,v.list_id.map(|id|id.to_string()),sql_revision(v.revision)?,deleted,v.recurrence.as_ref().map(serde_json::to_string).transpose()?,serde_json::to_string(&v.exceptions)?])?;
         }
         Entity::Event(v) => {
             let (start_utc, end_utc, start_date, end_date) = match &v.schedule {
@@ -247,7 +315,7 @@ pub(crate) fn put(connection: &Connection, snapshot: &Snapshot) -> Result<()> {
                     (None, None, Some(start.to_string()), Some(end.to_string()))
                 }
             };
-            connection.execute("INSERT INTO events(id,title,schedule_json,start_utc,end_utc,start_date,end_date,revision,deleted) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(id) DO UPDATE SET title=excluded.title,schedule_json=excluded.schedule_json,start_utc=excluded.start_utc,end_utc=excluded.end_utc,start_date=excluded.start_date,end_date=excluded.end_date,revision=excluded.revision,deleted=excluded.deleted",params![v.id.to_string(),v.title,serde_json::to_string(&v.schedule)?,start_utc,end_utc,start_date,end_date,sql_revision(v.revision)?,deleted])?;
+            connection.execute("INSERT INTO events(id,title,schedule_json,start_utc,end_utc,start_date,end_date,revision,deleted,calendar_id,recurrence_json,exceptions_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12) ON CONFLICT(id) DO UPDATE SET title=excluded.title,schedule_json=excluded.schedule_json,start_utc=excluded.start_utc,end_utc=excluded.end_utc,start_date=excluded.start_date,end_date=excluded.end_date,revision=excluded.revision,deleted=excluded.deleted,calendar_id=excluded.calendar_id,recurrence_json=excluded.recurrence_json,exceptions_json=excluded.exceptions_json",params![v.id.to_string(),v.title,serde_json::to_string(&v.schedule)?,start_utc,end_utc,start_date,end_date,sql_revision(v.revision)?,deleted,v.calendar_id.map(|id|id.to_string()),v.recurrence.as_ref().map(serde_json::to_string).transpose()?,serde_json::to_string(&v.exceptions)?])?;
         }
         Entity::TimeBlock(v) => {
             connection.execute("INSERT INTO time_blocks(id,task_id,start_utc,end_utc,timezone,revision,deleted) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id,start_utc=excluded.start_utc,end_utc=excluded.end_utc,timezone=excluded.timezone,revision=excluded.revision,deleted=excluded.deleted",params![v.id.to_string(),v.task_id.to_string(),timestamp(v.start),timestamp(v.end),v.timezone,sql_revision(v.revision)?,deleted])?;
@@ -292,5 +360,138 @@ pub(crate) fn guard(connection: &Connection, actor: &str, id: &EntityId) -> Resu
 pub(crate) fn set_guard(connection: &Connection, actor: &str, snapshot: &Snapshot) -> Result<()> {
     let (kind, id) = key(&snapshot.id());
     connection.execute("INSERT INTO history_guards(actor,kind,entity_id,revision) VALUES(?1,?2,?3,?4) ON CONFLICT(actor,kind,entity_id) DO UPDATE SET revision=excluded.revision",params![actor,kind,id,sql_revision(snapshot.revision())?])?;
+    Ok(())
+}
+
+/// Complete stable-ID snapshot, including tombstones, in parent-before-child order.
+pub(crate) fn all_snapshots(connection: &Connection) -> Result<Vec<Snapshot>> {
+    let mut result = Vec::new();
+    for (table, kind) in [
+        ("task_lists", "list"),
+        ("calendars", "calendar"),
+        ("tasks", "task"),
+        ("events", "event"),
+        ("time_blocks", "block"),
+        ("reminders", "reminder"),
+    ] {
+        let mut statement = connection.prepare(&format!("SELECT id FROM {table} ORDER BY id"))?;
+        let ids = statement
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for id in ids {
+            let id = match kind {
+                "list" => EntityId::List(
+                    id.parse()
+                        .map_err(|_| Error::InvalidInput("invalid list ID".into()))?,
+                ),
+                "calendar" => EntityId::Calendar(
+                    id.parse()
+                        .map_err(|_| Error::InvalidInput("invalid calendar ID".into()))?,
+                ),
+                "task" => EntityId::Task(
+                    id.parse()
+                        .map_err(|_| Error::InvalidInput("invalid task ID".into()))?,
+                ),
+                "event" => EntityId::Event(
+                    id.parse()
+                        .map_err(|_| Error::InvalidInput("invalid event ID".into()))?,
+                ),
+                "block" => EntityId::TimeBlock(
+                    id.parse()
+                        .map_err(|_| Error::InvalidInput("invalid block ID".into()))?,
+                ),
+                _ => EntityId::Reminder(
+                    id.parse()
+                        .map_err(|_| Error::InvalidInput("invalid reminder ID".into()))?,
+                ),
+            };
+            if let Some(value) = get(connection, &id)? {
+                result.push(value);
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// Check duplicated/indexed columns against their canonical serialized values.
+/// SQLite integrity_check alone cannot detect a semantically corrupt projection.
+pub(crate) fn validate_consistency(connection: &Connection) -> Result<()> {
+    let invalid =
+        || Error::InvalidInput("stored entity columns disagree with canonical data".into());
+    let mut statement = connection
+        .prepare("SELECT schedule_json,start_utc,end_utc,start_date,end_date FROM events")?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, Option<String>>(4)?,
+        ))
+    })?;
+    for row in rows {
+        let (json, start_utc, end_utc, start_date, end_date) = row?;
+        let expected = match serde_json::from_str::<EventSchedule>(&json)? {
+            EventSchedule::Timed { start, end, .. } => {
+                (Some(timestamp(start)), Some(timestamp(end)), None, None)
+            }
+            EventSchedule::AllDay { start, end } => {
+                (None, None, Some(start.to_string()), Some(end.to_string()))
+            }
+        };
+        if expected != (start_utc, end_utc, start_date, end_date) {
+            return Err(invalid());
+        }
+    }
+    let mut statement = connection.prepare("SELECT id,revision,data_json FROM reminders")?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, revision, json) = row?;
+        let value: Reminder = serde_json::from_str(&json)?;
+        if id != value.id.to_string() || revision <= 0 || value.revision != revision as u64 {
+            return Err(invalid());
+        }
+    }
+    let values = all_snapshots(connection)?;
+    for value in &values {
+        crate::engine::validate_snapshot(value)?;
+    }
+    crate::engine::check_relations(connection, &values, false)?;
+    Ok(())
+}
+
+/// A reader must not initialize or migrate a database, including for backups,
+/// MCP read-only sessions and Android data inspection.
+pub(crate) fn validate_read_only(connection: &Connection) -> Result<()> {
+    connection.busy_timeout(Duration::from_secs(5))?;
+    let app_id: i64 = connection.pragma_query_value(None, "application_id", |row| row.get(0))?;
+    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if app_id != APPLICATION_ID {
+        return Err(Error::UnrecognizedDatabase);
+    }
+    if version != SCHEMA_VERSION {
+        return Err(Error::UnsupportedSchema(version));
+    }
+    for sql in [
+        "SELECT id,title,revision,deleted FROM task_lists LIMIT 0",
+        "SELECT id,title,completed,due_json,list_id,revision,deleted,recurrence_json,exceptions_json FROM tasks LIMIT 0",
+        "SELECT id,title,schedule_json,start_utc,end_utc,start_date,end_date,revision,deleted,calendar_id,recurrence_json,exceptions_json FROM events LIMIT 0",
+        "SELECT id,task_id,start_utc,end_utc,timezone,revision,deleted FROM time_blocks LIMIT 0",
+        "SELECT id,title,revision,deleted FROM calendars LIMIT 0",
+        "SELECT id,data_json,revision,deleted FROM reminders LIMIT 0",
+        "SELECT seq,actor,before_json,after_json,undone FROM operations LIMIT 0",
+        "SELECT actor,kind,entity_id,revision FROM history_guards LIMIT 0",
+        "SELECT actor,request_id,commands_json,outcomes_json FROM requests LIMIT 0",
+    ] {
+        connection
+            .prepare(sql)
+            .map_err(|_| Error::UnrecognizedDatabase)?;
+    }
     Ok(())
 }

@@ -5,7 +5,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use futures_channel::oneshot;
 use ultratasks_core::{
-    CalendarQuery, Command, Engine, Event, HistoryStatus, Task, TaskQuery, TimeBlock,
+    CalendarQuery, Command, Engine, EventOccurrence, HistoryStatus, Task, TaskQuery, TimeBlock,
 };
 
 pub const PAGE_SIZE: u32 = 1_000;
@@ -32,9 +32,10 @@ pub struct ScheduledTask {
 
 pub struct Snapshot {
     pub tasks: Vec<Task>,
-    pub events: Vec<Event>,
+    pub events: Vec<EventOccurrence>,
     pub blocks: Vec<ScheduledTask>,
     pub history: HistoryStatus,
+    pub notification_warning: Option<String>,
 }
 
 struct Job {
@@ -49,16 +50,49 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn start(path: PathBuf) -> std::io::Result<Self> {
+    pub fn start(
+        path: PathBuf,
+        timezone: Tz,
+        notifications_enabled: bool,
+    ) -> std::io::Result<Self> {
         let (sender, receiver) = mpsc::channel::<Job>();
         thread::Builder::new()
             .name("ultratasks-storage".into())
             .spawn(move || {
+                let mut notifications = crate::notifications::Notifications::new(
+                    &path,
+                    timezone,
+                    notifications_enabled,
+                );
                 let mut engine = Engine::open(path).map_err(|error| error.to_string());
+                if let Ok(engine) = &engine
+                    && let Some(warning) = notifications.reconcile(engine)
+                {
+                    eprintln!("{warning}");
+                }
                 // Dropping all Backend handles closes this channel; accepted jobs finish first.
-                while let Ok(job) = receiver.recv() {
+                loop {
+                    let job = match receiver.recv_timeout(std::time::Duration::from_secs(30)) {
+                        Ok(job) => job,
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            if let Ok(engine) = &engine
+                                && let Some(warning) = notifications.reconcile(engine)
+                            {
+                                eprintln!("{warning}");
+                            }
+                            continue;
+                        }
+                    };
                     let result = match &mut engine {
-                        Ok(engine) => run(engine, job.operation, &job.query),
+                        Ok(engine) => {
+                            let mut result = run(engine, job.operation, &job.query);
+                            let warning = notifications.reconcile(engine);
+                            if let Ok(snapshot) = &mut result {
+                                snapshot.notification_warning = warning;
+                            }
+                            result
+                        }
                         Err(error) => Err(error.clone()),
                     };
                     let _ = job.reply.send(result);
@@ -120,7 +154,7 @@ fn snapshot(engine: &Engine, query: &ViewQuery) -> Result<Snapshot, String> {
         limit: PAGE_SIZE,
     };
     let events = engine
-        .events(&calendar)
+        .event_occurrences(&calendar, None)
         .map_err(|error| error.to_string())?;
     let blocks = engine
         .time_blocks(&calendar)
@@ -140,6 +174,7 @@ fn snapshot(engine: &Engine, query: &ViewQuery) -> Result<Snapshot, String> {
         events,
         blocks,
         history,
+        notification_warning: None,
     })
 }
 

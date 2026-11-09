@@ -1,0 +1,29 @@
+{
+  "verifier_cargo_version": "0.2.0",
+  "artifacts": [
+    {
+      "file": "verifier.aar",
+      "url": "https://raw.githubusercontent.com/rustls/rustls-platform-verifier/1aa691352a5e0c215210dfc9a3c2f2078639dc91/android-release-support/maven/org/rustls/rustls-platform-verifier/0.2.0/rustls-platform-verifier-0.2.0.aar",
+      "sha256": "aa021794230fbc2f0be355999e2cf67398dd563de066a2e17001ffbd0b69101b",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "file": "kotlin-stdlib-2.2.10.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.10/kotlin-stdlib-2.2.10.jar",
+      "sha256": "9c67cc79efd6b9215b49d2a4308f5f3433537376c7c88e89bdd6729bd096e61a",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "annotations-13.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/13.0/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "r8-8.10.21.jar",
+      "url": "https://dl.google.com/dl/android/maven2/com/android/tools/r8/8.10.21/r8-8.10.21.jar",
+      "sha256": "bbdf3f6431af895d72a5f4bed6fbdde2b43241ec98b36992c554ce4a6dd7892b",
+      "license": "BSD-3-Clause (build tool; not included in APK)"
+    }
+  ]
+}
