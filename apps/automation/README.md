@@ -71,11 +71,16 @@ MCP クライアントの stdio server 設定例。実際にビルドした実�
   "provider": "ollama",
   "endpoint": "http://127.0.0.1:11434/api/chat",
   "model": "YOUR_INSTALLED_MODEL",
-  "api_key_env": null
+  "api_key_env": null,
+  "structured_output": true
 }
 ```
 
 クラウドの OpenAI 互換サーバーは `provider: "openai_compatible"` と完全な HTTPS Chat Completions URL を指定する。認証情報は `api_key_env` で環境変数名だけを指定する。値を設定ファイル・引数・提案へ保存しない。URL 内の認証情報・クエリ・フラグメントを拒否し、リダイレクトにも追従しない。HTTP はループバックのみ許可する。
+
+`structured_output` は省略時も `true`。Rustの `Command` と同じ型から生成するJSON Schemaを送り、OpenAI互換では `response_format.type: "json_schema"` と `strict: true`、Ollamaでは `format` にスキーマ本体を指定する。全オブジェクトの追加キーを禁止し、任意フィールドもnullを許す必須キーとして指定する。構造化出力に非対応の接続先だけ、設定で明示的に `false` として従来のJSON objectモードを選べる。400等のエラーから自動で制約を外して再送しない。
+
+モデルが安全な操作を提案できない場合のため、生成スキーマは空の `commands` による辞退を許す。空の提案はホストで検証エラーになり、適用できず、データや履歴も変わらない。
 
 ```bash
 ultratasks-automation --database local/tasks.db --actor ai-personal ai-propose --config local/ai.json --prompt-file local/request.txt --timezone Asia/Tokyo --task TASK_UUID --output local/proposal.json
@@ -83,7 +88,7 @@ ultratasks-automation --database local/tasks.db --actor ai-personal ai-propose -
 ultratasks-automation --database local/tasks.db --actor ai-personal ai-apply --plan local/proposal.json --approve
 ```
 
-送るデータはプロンプトと、`--task / --event / --list / --time-block / --calendar / --reminder` で明示したレコードだけ。対象を一つも指定しなければ既存の予定は送らない。現在時刻と指定 IANA タイムゾーンも送る。選択は最大 100 件、コンテキスト 128 KiB、応答 1 MiB、操作は最大 100 件。モデルの返答は JSON として構文・操作範囲・更新版・関連を検証し、ロールバックされるプレビューを通す。モデルが対象外の ID を使う提案は拒否する。
+送るデータはプロンプトと、`--task / --event / --list / --time-block / --calendar / --reminder` で明示したレコードだけ。対象を一つも指定しなければ既存の予定は送らない。現在時刻と指定 IANA タイムゾーンも送る。選択は最大 100 件、コンテキスト 128 KiB、応答 1 MiB、操作は最大 100 件。スキーマに従った応答でも信頼せず、Rustで構文・日付・ID・操作範囲・更新版・関連を再検証し、ロールバックされるプレビューを通す。モデルが対象外の ID を使う提案は拒否する。
 
 提案生成は保存済みデータを変更しない。`ai-apply --approve` が適用点で、選択した全レコードの版をトランザクション内で照合する。文脈として読んだだけの予定が変わっても古い提案の適用を拒否する。削除で連鎖的に変更する作業枠・通知も選択に含める必要があり、提案の後で新しい従属レコードが追加された場合も一括して拒否する。成功後の再送は同じ結果を返す。適用は永続 Undo の対象で、元データ内の文章をモデルへの指示として扱わないようプロンプトを分離する。
 

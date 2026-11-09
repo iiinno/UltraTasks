@@ -8,12 +8,14 @@
 
 ```sh
 rustup target add aarch64-linux-android
-sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.0.13004108'
 export ANDROID_SDK_ROOT=/path/to/android-sdk
+apps/android/setup-sdk.sh "$ANDROID_SDK_ROOT"
 apps/android/build.sh
 ```
 
-SDK標準の`javac / d8 / aapt2 / zipalign / apksigner`でシステムホストの診断用debug APKを生成する。出力は`target/android-system/ultratasks-system-debug.apk`。生成するdebug署名鍵とビルド出力は`target/`内だけに置き、Gitへ保存しない。公開配布用の署名・インストーラー設定ではない。
+`setup-sdk.sh`はLinux x86_64向け。JDK 17以上を前提に、公式command-line toolsのSHA-256を検証し、固定版のSDK・build-tools・NDKを導入する。既に揃っている場合は再利用する。CIもこの手順を使い、ランナーのプリインストール内容に依存しない。
+
+JDKの`javac`、固定版D8、SDKの`aapt2 / zipalign / apksigner`でシステムホストの診断用debug APKを生成する。出力は`target/android-system/ultratasks-system-debug.apk`。生成するdebug署名鍵とビルド出力は`target/`内だけに置き、Gitへ保存しない。公開配布用の署名・インストーラー設定ではない。
 
 ## 接続点
 

@@ -6050,6 +6050,7 @@ dependencies = [
  "schemars_derive",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -7194,6 +7195,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "reqwest",
+ "schemars",
  "serde",
  "serde_json",
  "ultratasks-core",
@@ -7241,6 +7243,7 @@ dependencies = [
  "chrono-tz",
  "proptest",
  "rusqlite",
+ "schemars",
  "serde",
  "serde_json",
  "tempfile",

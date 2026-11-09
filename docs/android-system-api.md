@@ -38,6 +38,8 @@ Javaの`NativeBridge.dispatch(databasePath, requestJson)`は編集可能な接�
 
 同期先はループバック以外でHTTPSを必須とする。認証情報は呼び出し元が管理し、DBやAI提案へ保存しない。競合解決・サーバー復旧後の選択・AI提案の適用は`approved: true`を明示して呼ぶ。AI提案は自動適用せず、共有コマンドの更新版・対象範囲の検証を通して適用する。
 
+`ai_propose.config` は共有 `ProviderConfig` を使う。`provider`、`endpoint`、`model`、`api_key_env: null` と、任意の `structured_output` を指定する。構造化出力は省略時もtrueで、coreのコマンド型から作るJSON Schemaを接続先へ渡す。非対応プロバイダーだけ明示的にfalseを指定できる。Androidでは認証情報を環境変数から読まず、資格情報ストアから復号した値を別引数で渡す。スキーマ制約を使っても、操作範囲と更新版の検証、明示的な適用承認は省略しない。
+
 Javaの`SystemController`はHTTPSの同期先と認証情報の名前を、一つの設定スナップショットと世代番号で管理する。変更・無効化後に、待ち行列に残った古い設定の要求を開始しない。設定保存とJobScheduler登録の結果を区別し、登録に失敗した場合は`background_schedule_failed`を残す。設定は手動同期に使用できる。
 
 Java側の通信処理は2ワーカーと最大8件の待ち行列に制限する。ネットワーク要求はコピー時点で1 MiB・深さ32・20,000要素を上限とし、呼び出し元が後からJSONを書き換えても送信内容を変えられない。同期・競合解決・サーバー復旧は同時に一つだけ実行する。

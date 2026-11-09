@@ -11,7 +11,7 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -278,7 +278,14 @@ impl TemporaryDatabase {
         Ok(Self { path })
     }
     fn publish(self, destination: &Path) -> TransferResult<()> {
-        File::open(&self.path)?.sync_all()?;
+        // Windows FlushFileBuffers requires a handle opened for writing. A
+        // read-only File::open works for fsync on Unix but fails with AccessDenied
+        // on Windows even when the file itself is writable.
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.path)?
+            .sync_all()?;
         // Same-directory hard link is an atomic no-clobber publication. rename
         // would overwrite a destination created after the initial exists check.
         fs::hard_link(&self.path, destination).map_err(|error| {
@@ -294,7 +301,7 @@ impl TemporaryDatabase {
                 .parent()
                 .filter(|p| !p.as_os_str().is_empty())
                 .unwrap_or(Path::new("."));
-            File::open(parent)?.sync_all()?;
+            fs::File::open(parent)?.sync_all()?;
         }
         Ok(())
     }

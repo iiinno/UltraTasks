@@ -1,11 +1,12 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt, str::FromStr};
 use uuid::Uuid;
 
 macro_rules! id_type {
     ($name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
         #[serde(transparent)]
         pub struct $name(pub Uuid);
         impl $name {
@@ -38,7 +39,7 @@ id_type!(TimeBlockId);
 id_type!(CalendarId);
 id_type!(ReminderId);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub enum EntityId {
     Task(TaskId),
     List(ListId),
@@ -48,14 +49,14 @@ pub enum EntityId {
     Reminder(ReminderId),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum DueDate {
     Date(NaiveDate),
     At { at: DateTime<Utc>, timezone: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Task {
     pub id: TaskId,
@@ -70,7 +71,7 @@ pub struct Task {
     pub revision: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TaskList {
     pub id: ListId,
@@ -79,7 +80,7 @@ pub struct TaskList {
 }
 
 /// All ranges are half-open: the end is excluded. All-day dates are never UTC midnight.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum EventSchedule {
     Timed {
@@ -93,7 +94,7 @@ pub enum EventSchedule {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Event {
     pub id: EventId,
@@ -108,7 +109,7 @@ pub struct Event {
     pub revision: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TimeBlock {
     pub id: TimeBlockId,
@@ -121,7 +122,7 @@ pub struct TimeBlock {
 
 /// Frequencies use the original local date as their anchor. Missing month days
 /// are skipped; weekly weekdays use ISO Monday=1 ... Sunday=7.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum Frequency {
     Daily,
@@ -129,7 +130,7 @@ pub enum Frequency {
     Monthly,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Recurrence {
     pub frequency: Frequency,
@@ -140,7 +141,7 @@ pub struct Recurrence {
     pub until: Option<NaiveDate>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum EventException {
     Skip,
@@ -149,7 +150,7 @@ pub enum EventException {
         schedule: EventSchedule,
     },
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum TaskException {
     Skip,
@@ -159,7 +160,7 @@ pub enum TaskException {
         completed: bool,
     },
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Calendar {
     pub id: CalendarId,
@@ -169,7 +170,7 @@ pub struct Calendar {
 
 /// Durable reminder policy. Each device decides whether to deliver it.
 /// At fires once; Before resolves against each current target occurrence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Reminder {
     pub id: ReminderId,
@@ -178,14 +179,14 @@ pub struct Reminder {
     pub enabled: bool,
     pub revision: u64,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum ReminderTrigger {
     At(DateTime<Utc>),
     Before { minutes: u32 },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EventOccurrence {
     pub event_id: EventId,
@@ -195,7 +196,7 @@ pub struct EventOccurrence {
     pub calendar_id: Option<CalendarId>,
     pub revision: u64,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TaskOccurrence {
     pub task_id: TaskId,
@@ -205,7 +206,7 @@ pub struct TaskOccurrence {
     pub completed: bool,
     pub revision: u64,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum DueFilter {
     None,
@@ -221,7 +222,7 @@ pub enum DueFilter {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum Command {
     CreateCalendar {
@@ -345,7 +346,7 @@ pub enum Command {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub enum Outcome {
     Calendar(Calendar),
@@ -357,7 +358,7 @@ pub enum Outcome {
     Deleted(EntityId),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TaskQuery {
     pub search: Option<String>,
@@ -378,7 +379,7 @@ impl Default for TaskQuery {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CalendarQuery {
     pub start: DateTime<Utc>,
@@ -387,7 +388,7 @@ pub struct CalendarQuery {
     pub limit: u32,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryStatus {
     pub can_undo: bool,

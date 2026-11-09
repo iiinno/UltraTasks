@@ -59,7 +59,7 @@ impl WindowsBackend {
             .GetScheduledToastNotifications()
             .map_err(platform)?;
         for entry in scheduled {
-            if entry.Id().map_err(platform)?.to_string() == id {
+            if entry.Id().map_err(platform)? == id {
                 self.notifier.RemoveFromSchedule(&entry).map_err(platform)?;
             }
         }

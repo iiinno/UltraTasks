@@ -201,6 +201,33 @@ async fn provider_server_kind(
     draft: Value,
     kind: ProviderKind,
 ) -> (Provider, tokio::task::JoinHandle<Value>) {
+    provider_server_mode(draft, kind, true).await
+}
+
+async fn provider_server_mode(
+    draft: Value,
+    kind: ProviderKind,
+    structured_output: bool,
+) -> (Provider, tokio::task::JoinHandle<Value>) {
+    let response = match kind {
+        ProviderKind::OpenaiCompatible => {
+            json!({"choices":[{"message":{"content":draft.to_string()}}]})
+        }
+        ProviderKind::Ollama => json!({"message":{"content":draft.to_string()}}),
+    }
+    .to_string()
+    .into_bytes();
+    let length = response.len();
+    provider_http_response(kind, structured_output, 200, Some(length), response).await
+}
+
+async fn provider_http_response(
+    kind: ProviderKind,
+    structured_output: bool,
+    status: u16,
+    response_length: Option<usize>,
+    response: Vec<u8>,
+) -> (Provider, tokio::task::JoinHandle<Value>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
@@ -220,15 +247,13 @@ async fn provider_server_kind(
         assert!(content_length < 256 * 1024);
         let mut body = vec![0; content_length];
         stream.read_exact(&mut body).await.unwrap();
-        let response = match kind {
-            ProviderKind::OpenaiCompatible => {
-                json!({"choices":[{"message":{"content":draft.to_string()}}]})
-            }
-            ProviderKind::Ollama => json!({"message":{"content":draft.to_string()}}),
-        }
-        .to_string();
-        stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",response.len(),response).as_bytes()).await.unwrap();
-        stream.flush().await.unwrap();
+        let length = response_length
+            .map(|length| format!("Content-Length: {length}\r\n"))
+            .unwrap_or_default();
+        stream.write_all(format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\n{length}Connection: close\r\n\r\n").as_bytes()).await.unwrap();
+        // A client enforcing the response cap may close before our whole body.
+        let _ = stream.write_all(&response).await;
+        let _ = stream.flush().await;
         serde_json::from_slice(&body).unwrap()
     });
     let provider = Provider::new(ProviderConfig {
@@ -236,6 +261,7 @@ async fn provider_server_kind(
         endpoint: format!("http://{address}/v1/chat/completions"),
         model: "fixture-model".into(),
         api_key_env: None,
+        structured_output,
     })
     .unwrap();
     (provider, server)
@@ -259,6 +285,12 @@ async fn ai_real_http_adapter_sends_only_selected_context_and_never_auto_applies
     let request = server.await.unwrap();
     assert!(!request.to_string().contains("PRIVATE_NOT_SELECTED"));
     assert!(request.to_string().contains("Asia/Tokyo"));
+    assert_eq!(request["response_format"]["type"], "json_schema");
+    assert_eq!(request["response_format"]["json_schema"]["strict"], true);
+    assert_eq!(
+        request["response_format"]["json_schema"]["schema"]["properties"]["commands"]["maxItems"],
+        100
+    );
     assert!(!engine.task(selected.id).unwrap().completed);
     assert_eq!(engine.task(selected.id).unwrap().revision, 1);
     let outcomes = apply_plan(&mut engine, &plan).unwrap();
@@ -338,7 +370,8 @@ fn provider_rejects_insecure_remote_and_credential_urls() {
                 provider: ProviderKind::Ollama,
                 endpoint: endpoint.into(),
                 model: "test".into(),
-                api_key_env: None
+                api_key_env: None,
+                structured_output: true,
             })
             .is_err()
         );
@@ -409,7 +442,9 @@ async fn ollama_adapter_proposes_calendar_recurrence_and_reminder_as_one_undoabl
         .unwrap();
     let request = server.await.unwrap();
     assert_eq!(request["stream"], false);
-    assert_eq!(request["format"], "json");
+    assert_eq!(request["format"]["type"], "object");
+    assert_eq!(request["format"]["additionalProperties"], false);
+    assert_eq!(request["format"]["properties"]["commands"]["maxItems"], 100);
     assert!(engine.event(event.id).unwrap().recurrence.is_none());
     apply_plan(&mut engine, &plan).unwrap();
     assert_eq!(
@@ -519,5 +554,94 @@ fn cli_ai_apply_requires_explicit_approval() {
             .tasks(&TaskQuery::default())
             .unwrap()
             .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn legacy_json_object_mode_requires_explicit_provider_configuration() {
+    let draft = json!({"summary":"Propose a task","commands":[{"CreateTask":{"title":"review required","due":null,"list_id":null}}]});
+    for kind in [ProviderKind::OpenaiCompatible, ProviderKind::Ollama] {
+        let mut engine = Engine::in_memory().unwrap();
+        let (provider, server) = provider_server_mode(draft.clone(), kind, false).await;
+        provider
+            .propose(&mut engine, "make one task", &[], clock())
+            .await
+            .unwrap();
+        let request = server.await.unwrap();
+        match kind {
+            ProviderKind::OpenaiCompatible => {
+                assert_eq!(request["response_format"], json!({"type":"json_object"}))
+            }
+            ProviderKind::Ollama => assert_eq!(request["format"], "json"),
+        }
+        assert!(engine.tasks(&TaskQuery::default()).unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn schema_rejection_is_reported_without_silent_fallback_or_writes() {
+    let mut engine = Engine::in_memory().unwrap();
+    let (provider, server) =
+        provider_http_response(ProviderKind::OpenaiCompatible, true, 400, Some(0), vec![]).await;
+    let error = provider
+        .propose(&mut engine, "make one task", &[], clock())
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "AI provider returned HTTP 400");
+    let request = server.await.unwrap();
+    assert_eq!(request["response_format"]["type"], "json_schema");
+    assert!(engine.tasks(&TaskQuery::default()).unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn ai_response_cap_applies_to_declared_and_streamed_lengths() {
+    for declared in [true, false] {
+        let mut engine = Engine::in_memory().unwrap();
+        let too_large = 1024 * 1024 + 1;
+        let (length, body) = if declared {
+            (Some(too_large), vec![])
+        } else {
+            (None, vec![b'x'; too_large])
+        };
+        let (provider, server) =
+            provider_http_response(ProviderKind::OpenaiCompatible, true, 200, length, body).await;
+        let error = provider
+            .propose(&mut engine, "make one task", &[], clock())
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), "AI response exceeds 1 MiB");
+        server.await.unwrap();
+        assert!(engine.tasks(&TaskQuery::default()).unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn schema_allows_empty_refusal_but_host_rejects_it_without_changes() {
+    let mut engine = Engine::in_memory().unwrap();
+    let selected = task(&mut engine, "keep unchanged");
+    let before = engine.snapshots().unwrap();
+    let history_before = serde_json::to_value(engine.history_status().unwrap()).unwrap();
+    let (provider, server) =
+        provider_server(json!({"summary":"Cannot safely represent this request","commands":[]}))
+            .await;
+    let error = provider
+        .propose(
+            &mut engine,
+            "make a proposal only if safe",
+            &[EntityId::Task(selected.id)],
+            clock(),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "AI plan must contain 1..100 commands");
+    let request = server.await.unwrap();
+    assert_eq!(
+        request["response_format"]["json_schema"]["schema"]["properties"]["commands"]["minItems"],
+        0
+    );
+    assert_eq!(engine.snapshots().unwrap(), before);
+    assert_eq!(
+        serde_json::to_value(engine.history_status().unwrap()).unwrap(),
+        history_before
     );
 }
