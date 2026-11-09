@@ -32,6 +32,7 @@ jobs:
       - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
         with:
           key: systems
+          cache-on-failure: 'true'
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: System tests and acceptance scenarios
@@ -65,6 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
         with:
           key: desktop
+          cache-on-failure: 'true'
       - name: Verify native dependency graph
         run: python scripts/check_native_dependencies.py
       - name: Desktop static analysis
@@ -95,6 +97,7 @@ jobs:
       - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
         with:
           key: android-system
+          cache-on-failure: 'true'
       - name: Install Android build dependencies
         run: |
           apps/android/setup-sdk.sh "$RUNNER_TEMP/ultratasks-android-sdk"

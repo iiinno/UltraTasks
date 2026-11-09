@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, ensure};
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use rmcp::{ServiceExt, transport::async_rw::AsyncRwTransport};
 use serde_json::json;
 use std::{
@@ -25,6 +25,30 @@ struct Cli {
     actor: String,
     #[command(subcommand)]
     action: Action,
+}
+
+#[derive(Args)]
+struct AiProposeArgs {
+    #[arg(long)]
+    config: PathBuf,
+    #[arg(long)]
+    prompt_file: PathBuf,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long)]
+    timezone: String,
+    #[arg(long)]
+    task: Vec<ultratasks_core::TaskId>,
+    #[arg(long)]
+    event: Vec<ultratasks_core::EventId>,
+    #[arg(long)]
+    list: Vec<ultratasks_core::ListId>,
+    #[arg(long)]
+    time_block: Vec<ultratasks_core::TimeBlockId>,
+    #[arg(long)]
+    calendar: Vec<ultratasks_core::CalendarId>,
+    #[arg(long)]
+    reminder: Vec<ultratasks_core::ReminderId>,
 }
 
 #[derive(Subcommand)]
@@ -105,28 +129,7 @@ enum Action {
         allow_writes: bool,
     },
     /// Send only the prompt and explicitly selected IDs to the configured AI.
-    AiPropose {
-        #[arg(long)]
-        config: PathBuf,
-        #[arg(long)]
-        prompt_file: PathBuf,
-        #[arg(long)]
-        output: PathBuf,
-        #[arg(long)]
-        timezone: String,
-        #[arg(long)]
-        task: Vec<ultratasks_core::TaskId>,
-        #[arg(long)]
-        event: Vec<ultratasks_core::EventId>,
-        #[arg(long)]
-        list: Vec<ultratasks_core::ListId>,
-        #[arg(long)]
-        time_block: Vec<ultratasks_core::TimeBlockId>,
-        #[arg(long)]
-        calendar: Vec<ultratasks_core::CalendarId>,
-        #[arg(long)]
-        reminder: Vec<ultratasks_core::ReminderId>,
-    },
+    AiPropose(Box<AiProposeArgs>),
     /// Apply a reviewed AI plan. Requires explicit --approve; never calls a model.
     AiApply {
         #[arg(long)]
@@ -264,18 +267,19 @@ async fn main() -> Result<()> {
                 .await?;
             return Ok(());
         }
-        Action::AiPropose {
-            config,
-            prompt_file,
-            output,
-            timezone,
-            task,
-            event,
-            list,
-            time_block,
-            calendar,
-            reminder,
-        } => {
+        Action::AiPropose(args) => {
+            let AiProposeArgs {
+                config,
+                prompt_file,
+                output,
+                timezone,
+                task,
+                event,
+                list,
+                time_block,
+                calendar,
+                reminder,
+            } = *args;
             let config: ProviderConfig =
                 serde_json::from_slice(&read_document(&config, 16 * 1024)?)?;
             let provider = Provider::new(config)?;
