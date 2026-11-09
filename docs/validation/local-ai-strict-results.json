@@ -1,0 +1,248 @@
+{
+  "verified_date_utc": "2026-11-09",
+  "mode": "generated strict JSON Schema; ProviderConfig.structured_output omitted and defaulted to true",
+  "model": "Qwen2.5-1.5B-Instruct-Q4_K_M",
+  "model_revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+  "inputs": {
+    "create-request": "「牛乳を買う」というタスクを1件だけ作成する提案をしてください。期限や所属リストは設定しないでください。",
+    "schedule-request": "選択したタスクに、2026年11月10日午前9時から30分間、Asia/Tokyo の作業時間を割り当てる提案をしてください。タイトルや期限は変更しないでください。"
+  },
+  "cli_steps": {
+    "create-approved": {
+      "step": "create-approved",
+      "elapsed_seconds": 0.008017820000532083,
+      "exit_code": 0,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "stdout": {
+        "outcomes": [
+          {
+            "Task": {
+              "completed": false,
+              "due": null,
+              "exceptions": {},
+              "id": "01a1c0be-b29b-721d-a612-cd5d3c6cee49",
+              "list_id": null,
+              "recurrence": null,
+              "revision": 1,
+              "title": "牛乳を買う"
+            }
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "create-retry": {
+      "step": "create-retry",
+      "elapsed_seconds": 0.005471358001159388,
+      "exit_code": 0,
+      "before": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "after": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "stdout": {
+        "outcomes": [
+          {
+            "Task": {
+              "completed": false,
+              "due": null,
+              "exceptions": {},
+              "id": "01a1c0be-b29b-721d-a612-cd5d3c6cee49",
+              "list_id": null,
+              "recurrence": null,
+              "revision": 1,
+              "title": "牛乳を買う"
+            }
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "create-strict-propose": {
+      "step": "create-strict-propose",
+      "elapsed_seconds": 19.032650869001372,
+      "exit_code": 0,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "stdout": {
+        "applied": false,
+        "commands": 1,
+        "proposal_saved": true,
+        "request_id": "ai-01a1c0bd-e712-76c8-b0e8-0d2c64f72d38"
+      },
+      "stderr": ""
+    },
+    "create-undo": {
+      "step": "create-undo",
+      "elapsed_seconds": 0.009126768998612533,
+      "exit_code": 0,
+      "before": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "after": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 2,
+        "requests": 1
+      },
+      "stdout": {
+        "changed": [
+          {
+            "Task": "01a1c0be-b29b-721d-a612-cd5d3c6cee49"
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "create-without-approval": {
+      "step": "create-without-approval",
+      "elapsed_seconds": 0.00554666399875714,
+      "exit_code": 1,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "stdout": "",
+      "stderr": "Error: review the plan and pass --approve to apply it\n"
+    },
+    "schedule-strict-propose": {
+      "step": "schedule-strict-propose",
+      "elapsed_seconds": 11.16547671400076,
+      "exit_code": 0,
+      "before": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "after": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "stdout": {
+        "applied": false,
+        "commands": 1,
+        "proposal_saved": true,
+        "request_id": "ai-01a1c0be-f631-7502-9d12-bc70a4327564"
+      },
+      "stderr": ""
+    }
+  },
+  "proposals": {
+    "create": {
+      "format_version": 1,
+      "request_id": "ai-01a1c0bd-e712-76c8-b0e8-0d2c64f72d38",
+      "summary": "提案：1件のタスク「牛乳を買う」を作成",
+      "clock": {
+        "now": "2026-11-09T14:36:54.356040980Z",
+        "timezone": "Asia/Tokyo"
+      },
+      "scope": [],
+      "commands": [
+        {
+          "CreateTask": {
+            "title": "牛乳を買う",
+            "due": null,
+            "list_id": null
+          }
+        }
+      ]
+    },
+    "schedule": {
+      "format_version": 1,
+      "request_id": "ai-01a1c0be-f631-7502-9d12-bc70a4327564",
+      "summary": "在选中的任务上创建一个提醒，提醒在2026年11月10日早上9点到9点30分，位于Asia/Tokyo时区。",
+      "clock": {
+        "now": "2026-11-09T14:38:11.629798072Z",
+        "timezone": "Asia/Tokyo"
+      },
+      "scope": [
+        {
+          "id": {
+            "Task": "01a1c0be-b327-766e-94e0-fd4c73d148e1"
+          },
+          "revision": 1
+        }
+      ],
+      "commands": [
+        {
+          "CreateReminder": {
+            "target": {
+              "Task": "01a1c0be-b327-766e-94e0-fd4c73d148e1"
+            },
+            "trigger": {
+              "Before": {
+                "minutes": 30
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "schedule_review": {
+    "review_result": "rejected_wrong_intent",
+    "requested_operation": "ScheduleTask",
+    "proposed_operation": "CreateReminder",
+    "applied": false,
+    "reason": "Request was to allocate a work block; model proposed a relative reminder. Schema and revision scope were valid, semantic review failed."
+  },
+  "sources_sha256": {
+    "crates/ultratasks-ai/src/lib.rs": "dd494178e5511ec24394c46bf95a89cf24347333f8b1327762a402183037319a",
+    "crates/ultratasks-core/src/model.rs": "2c2913f000356248d2281caee9f50de1f0cb2edfc6335abf95d9d8cdf276f5f3"
+  },
+  "runtime_stopped_after_test": true
+}

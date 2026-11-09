@@ -1,0 +1,20 @@
+[package]
+name = "ultratasks-ai"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+ultratasks-core = { path = "../ultratasks-core" }
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+url = "2"
+uuid = { version = "1", features = ["v7"] }
+
+[lints]
+workspace = true

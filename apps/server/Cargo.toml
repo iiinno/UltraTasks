@@ -1,0 +1,16 @@
+[package]
+name = "ultratasks-server"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+ultratasks-sync = { path = "../../crates/ultratasks-sync" }
+ultratasks-core = { path = "../../crates/ultratasks-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+axum = "0.8"
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+
+[lints]
+workspace = true

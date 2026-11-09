@@ -1,0 +1,58 @@
+{
+  "caveat": "Numbers describe this process, filesystem and host only. Record hardware and OS separately for target-device comparisons.",
+  "complete_task": {
+    "max": 13734,
+    "min": 810,
+    "p50": 1307,
+    "p95": 3725,
+    "p99": 5350,
+    "samples": 100,
+    "unit": "microseconds"
+  },
+  "dataset": {
+    "query_limit": 50,
+    "sample_count": 100,
+    "tasks": 10000,
+    "time_blocks": 100
+  },
+  "environment": {
+    "architecture": "x86_64",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "debug_assertions": false,
+    "logical_cpu_count": 4,
+    "os": "linux",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "sqlite_journal_mode": "wal",
+    "sqlite_version": "3.51.1",
+    "storage_directory": "/tmp"
+  },
+  "insert_tasks_total_ms": 12919.934226000001,
+  "query_tasks_first_page": {
+    "max": 290,
+    "min": 58,
+    "p50": 114,
+    "p95": 152,
+    "p99": 177,
+    "samples": 100,
+    "unit": "microseconds"
+  },
+  "query_tasks_tail_match": {
+    "max": 10673,
+    "min": 1370,
+    "p50": 2231,
+    "p95": 2747,
+    "p99": 3295,
+    "samples": 100,
+    "unit": "microseconds"
+  },
+  "query_time_blocks": {
+    "max": 393,
+    "min": 132,
+    "p50": 235,
+    "p95": 306,
+    "p99": 371,
+    "samples": 100,
+    "unit": "microseconds"
+  },
+  "scope": "temporary on-disk SQLite, warm-cache sequential workload, includes transaction/history/sync-outbox/capacity persistence; excludes GUI/rendering and network"
+}

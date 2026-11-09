@@ -2,7 +2,7 @@
 
 更新日: 2026-11-09
 
-本書は初期の設計提案と一次資料の調査結果をまとめる。アプリ、保存処理、同期、Windows / Android のビルド・実機検証はまだ実施していない。依存候補の機能説明を、UltraTasksでの動作保証として扱わない。
+本書は初期の設計提案と一次資料の調査結果をまとめる。現在は共通コアに加え、入出力・同期・通知・MCP・AIとAndroidのシステムホストを実装している。現在の利用方法は[開発資料](development.md)、実行済みの検証は[検証記録](validation/README.md)を参照する。Windows / Android実機は未検証で、依存候補の機能説明をUltraTasksでの動作保証として扱わない。
 
 現在の実装順とユーザー回答は[システム実装計画](implementation-plan.md)を参照する。システムを優先し、UIは後からユーザーが監修する。初期対象は個人の複数端末、外部カレンダー常時連携は後回し、自己管理サーバーは内容を読める前提とする。
 
@@ -29,7 +29,7 @@ Rustのアプリケーション層（commands / queries / undo）
 将来のAI / MCP ── 同じアプリケーション層
 ```
 
-SQLiteは現段階の候補であり、導入済みではない。画面の描画にネットワーク応答を必要とさせず、ディスク処理・検索・同期もUIスレッドを塞がない構成を検証する。まず単一端末の保存と再起動後の復元を成立させ、その後に端末間同期を追加する。
+SQLiteは初期実装へ導入済み。画面の描画にネットワーク応答を必要とさせず、ディスク処理と検索を専用スレッドへ配置している。単一端末の保存と再起動後の復元を検証し、その後に端末間同期を追加する。
 
 ### Task / Event / TimeBlock
 
@@ -92,10 +92,10 @@ GPUI Kitには別のWebViewクレートがあり、上流 `gpui-mobile` のdefau
 - Zed本体のUIクレートはGPL-3.0-or-later。GPUIと同じライセンスとしてコードを持ち込まない。[Zed UI manifest](https://github.com/zed-industries/zed/blob/main/crates/ui/Cargo.toml)、[Zed Software Overview](https://zed.dev/software-overview)
 - 上流 `gpui-mobile` のmanifestは `GPL-3.0-or-later OR AGPL-3.0-or-later OR Apache-2.0`。採用コミットのファイル・依存の条件も確認し、出典と必要な通知を残す。
 
-## 将来のAI / MCP
+## AI / MCP
 
-AIとMCPはカレンダー・ToDoの操作品質を確立した後に追加する。予定検索、自然文からの入力、作業時間の提案を候補とする。
+AIとMCPは共通コマンドへ接続済み。予定検索、自然文からの入力、作業時間の提案を扱う。UIへの接続と操作画面の仕上げは別段階。
 
 UI・AI・MCPは同じcommands / queriesを通す。AIからSQLiteへ直接書き込ませず、検証・対象範囲・変更履歴・Undoを迂回させない。複数項目の変更はプレビューできる操作のまとまりとして扱う。外部クライアントや同期との競合がある場合、Undoは他端末の変更を無条件に巻き戻さない設計が必要になる。
 
-モデル提供元、ローカルモデル、MCPの通信方式、同期プロトコルは未選定。現段階では外部AIサービスへの接続・資格情報の設定を行っていない。
+MCPは公式SDKによるローカルstdio、同期は版付きHTTPプロトコル、AIはOpenAI互換とOllamaの設定式エンドポイントを採用した。外部クラウドAIサービスの資格情報は設定していない。詳細は[自動化ホスト](../apps/automation/README.md)に記録する。

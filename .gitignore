@@ -5,6 +5,8 @@
 *.db
 *.db-shm
 *.db-wal
+*.token
+*.keystore
 __pycache__/
 .DS_Store
 /local/

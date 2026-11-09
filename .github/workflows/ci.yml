@@ -1,0 +1,116 @@
+name: Rust quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+
+jobs:
+  systems:
+    name: Systems / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
+        with:
+          key: systems
+          cache-on-failure: 'true'
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: System tests and acceptance scenarios
+        run: cargo test --locked --workspace --exclude ultratasks-desktop --all-targets
+      - name: Static analysis
+        run: cargo clippy --locked --workspace --exclude ultratasks-desktop --all-targets -- -D warnings
+      - name: Build headless tools
+        run: cargo build --locked --release -p ultratasks-server -p ultratasks-sync -p ultratasks-automation -p ultratasks-notifications
+      - name: Retain headless tools
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ultratasks-tools-${{ matrix.os }}
+          path: |
+            target/release/ultratasks-server*
+            target/release/ultratasks-sync*
+            target/release/ultratasks-automation*
+            target/release/ultratasks-notifications*
+            !target/release/*.d
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-desktop:
+    name: Windows native desktop
+    runs-on: windows-latest
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
+        with:
+          key: desktop
+          cache-on-failure: 'true'
+      - name: Verify native dependency graph
+        run: python scripts/check_native_dependencies.py
+      - name: Desktop static analysis
+        run: cargo clippy --locked -p ultratasks-desktop --all-targets -- -D warnings
+      - name: Desktop date and presentation tests
+        run: cargo test --locked -p ultratasks-desktop
+      - name: Build Windows application
+        run: cargo build --locked --release -p ultratasks-desktop -p ultratasks-notifications
+      - name: Retain development binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ultratasks-windows-x64
+          path: |
+            target/release/ultratasks-desktop.exe
+            target/release/ultratasks-notifications.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  android-system:
+    name: Android native system host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned toolchain and Android target
+        run: |
+          rustup show
+          rustup target add aarch64-linux-android
+      - uses: Swatinem/rust-cache@401aff9a7a08acb9d27b64936a90db81024cff97 # v2.8.2
+        with:
+          key: android-system
+          cache-on-failure: 'true'
+      - name: Install Android build dependencies
+        run: |
+          apps/android/setup-sdk.sh "$RUNNER_TEMP/ultratasks-android-sdk"
+          echo "ANDROID_SDK_ROOT=$RUNNER_TEMP/ultratasks-android-sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$RUNNER_TEMP/ultratasks-android-sdk" >> "$GITHUB_ENV"
+      - name: Real JVM and JNI boundary tests
+        run: bash apps/android/test-jni.sh
+      - name: Build ARM64 native library and verify debug APK
+        run: bash apps/android/build.sh
+      - name: Retain system-host APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ultratasks-android-system-arm64
+          path: target/android-system/ultratasks-system-debug.apk
+          if-no-files-found: error
+          retention-days: 7

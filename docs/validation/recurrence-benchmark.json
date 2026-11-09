@@ -1,0 +1,45 @@
+{
+  "caveat": "This host and storage only; no target-device or GUI performance guarantee.",
+  "dataset": {
+    "counted_daily_series": 1,
+    "counted_series_count": 10000,
+    "counted_series_exceptions": 1000,
+    "expected_window_occurrences": 101,
+    "logical_json_bytes": 2598707,
+    "past_single_events": 10000,
+    "query_days": 1,
+    "sample_count": 100,
+    "unbounded_daily_series": 100
+  },
+  "environment": {
+    "architecture": "x86_64",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "debug_assertions": false,
+    "logical_cpu_count": 4,
+    "os": "linux",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "sqlite_journal_mode": "wal",
+    "sqlite_version": "3.51.1",
+    "storage_directory": "/tmp"
+  },
+  "expand_one_exception_heavy_series": {
+    "max": 13492,
+    "min": 3099,
+    "p50": 3792,
+    "p95": 4487,
+    "p99": 4540,
+    "samples": 100,
+    "unit": "microseconds"
+  },
+  "import_total_ms": 792.254094,
+  "query_calendar": {
+    "max": 11594,
+    "min": 5320,
+    "p50": 6820,
+    "p95": 8252,
+    "p99": 8379,
+    "samples": 100,
+    "unit": "microseconds"
+  },
+  "scope": "temporary on-disk SQLite, 100 warm-cache samples; recurrence includes validation, exception membership and bounded expansion; excludes GUI, notification OS delivery and network"
+}

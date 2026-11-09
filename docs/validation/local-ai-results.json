@@ -1,0 +1,455 @@
+{
+  "verified_date_utc": "2026-11-09",
+  "scope": "Real local CPU inference through production OpenAI-compatible adapter, synthetic data only; no cloud model API, keys or paid requests. Counts include tombstones. Individual request timings are not a benchmark.",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "available_cpus": 4,
+    "inference_threads": 2,
+    "batch_threads": 2,
+    "context_tokens": 16384,
+    "parallel_slots": 1,
+    "temperature": 0,
+    "seed": 42,
+    "gpu_layers": 0,
+    "engine_build": "Release/GCC14.2/GGML_NATIVE=ON",
+    "automation_build": "Rust1.99.1 debug",
+    "server_bind": "127.0.0.1:18765",
+    "api_timeout_seconds": 90,
+    "models_stopped_after_test": true
+  },
+  "provenance": {
+    "engine_repository": "https://github.com/ggml-org/llama.cpp",
+    "engine_release": "v0.9.0",
+    "engine_commit": "cd959bae99ff4bed22bef2604f45241c09bbb8c8",
+    "engine_archive_sha256": "fbe74146a3cdc00f706773eb233bc4aedb7d8c3c7e2122440e492a99c1ec5a76",
+    "engine_license": "MIT",
+    "model_repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+    "model_revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+    "model_file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+    "model_bytes": 491400032,
+    "model_license": "Apache-2.0",
+    "additional_model": {
+      "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+      "revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "bytes": 1117320736,
+      "license": "Apache-2.0"
+    }
+  },
+  "prompts": {
+    "create-explicit-request": "「牛乳を買う」をタイトルそのものとして、期限なし・所属リストなしのタスクを1件作る提案をしてください。返答は {\"summary\":\"説明\",\"commands\":[{\"CreateTask\":{\"title\":\"タスク名\",\"due\":null,\"list_id\":null}}]} という外部タグ形式のJSONだけにしてください。CreateTaskの中にidやexpected_revisionは入れません。",
+    "create-request": "「牛乳を買う」というタスクを1件だけ作成する提案をしてください。期限や所属リストは設定しないでください。",
+    "schedule-explicit-request": "選択したタスクに2026年11月10日午前9時から30分間、Asia/Tokyoの作業枠を割り当ててください。commandsにScheduleTaskを1件だけ含める提案です。返答は {\"summary\":\"説明\",\"commands\":[{\"ScheduleTask\":{\"task_id\":\"選択したタスクのid\",\"expected_task_revision\":1,\"start\":\"2026-11-10T00:00:00Z\",\"end\":\"2026-11-10T00:30:00Z\",\"timezone\":\"Asia/Tokyo\"}}]} のJSON形式とし、task_idにはselected_recordsの実際のidをそのままコピーしてください。タイトルと期限は変更しません。",
+    "schedule-request": "選択したタスクに、2026年11月10日午前9時から30分間、Asia/Tokyo の作業時間を割り当てる提案をしてください。タイトルや期限は変更しないでください。"
+  },
+  "cli_steps": {
+    "create-1.5b-propose": {
+      "step": "create-1.5b-propose",
+      "elapsed_seconds": 20.11580200500066,
+      "exit_code": 0,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "stdout": {
+        "applied": false,
+        "commands": 1,
+        "proposal_saved": true,
+        "request_id": "ai-01a1c0b4-a6f6-7293-9915-76c60525a253"
+      },
+      "stderr": ""
+    },
+    "create-approved": {
+      "step": "create-approved",
+      "elapsed_seconds": 0.009674110000560177,
+      "exit_code": 0,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "stdout": {
+        "outcomes": [
+          {
+            "Task": {
+              "completed": false,
+              "due": null,
+              "exceptions": {},
+              "id": "01a1c0b5-1293-765e-95b8-5b920717a448",
+              "list_id": null,
+              "recurrence": null,
+              "revision": 1,
+              "title": "牛乳を買う"
+            }
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "create-explicit-propose": {
+      "step": "create-explicit-propose",
+      "elapsed_seconds": 3.0754170079999312,
+      "exit_code": 1,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "stdout": "",
+      "stderr": "Error: AI proposal does not match the command format\n"
+    },
+    "create-propose": {
+      "step": "create-propose",
+      "elapsed_seconds": 9.384129432000918,
+      "exit_code": 1,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "stdout": "",
+      "stderr": "Error: AI proposal does not match the command format\n"
+    },
+    "create-retry": {
+      "step": "create-retry",
+      "elapsed_seconds": 0.0065775130005931715,
+      "exit_code": 0,
+      "before": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "after": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "stdout": {
+        "outcomes": [
+          {
+            "Task": {
+              "completed": false,
+              "due": null,
+              "exceptions": {},
+              "id": "01a1c0b5-1293-765e-95b8-5b920717a448",
+              "list_id": null,
+              "recurrence": null,
+              "revision": 1,
+              "title": "牛乳を買う"
+            }
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "create-undo": {
+      "step": "create-undo",
+      "elapsed_seconds": 0.010085840000101598,
+      "exit_code": 0,
+      "before": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 1,
+        "requests": 1
+      },
+      "after": {
+        "tasks": 1,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 2,
+        "requests": 1
+      },
+      "stdout": {
+        "changed": [
+          {
+            "Task": "01a1c0b5-1293-765e-95b8-5b920717a448"
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "create-without-approval": {
+      "step": "create-without-approval",
+      "elapsed_seconds": 0.008555103000617237,
+      "exit_code": 1,
+      "before": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "after": {
+        "tasks": 0,
+        "time_blocks": 0,
+        "operations": 0,
+        "sync_outbox": 0,
+        "requests": 0
+      },
+      "stdout": "",
+      "stderr": "Error: review the plan and pass --approve to apply it\n"
+    },
+    "schedule-1.5b-propose": {
+      "step": "schedule-1.5b-propose",
+      "elapsed_seconds": 5.453529251000873,
+      "exit_code": 1,
+      "before": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "after": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "stdout": "",
+      "stderr": "Error: AI proposal does not match the command format\n"
+    },
+    "schedule-approved": {
+      "step": "schedule-approved",
+      "elapsed_seconds": 0.017154741999547696,
+      "exit_code": 0,
+      "before": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "after": {
+        "tasks": 2,
+        "time_blocks": 1,
+        "operations": 2,
+        "sync_outbox": 4,
+        "requests": 3
+      },
+      "stdout": {
+        "outcomes": [
+          {
+            "TimeBlock": {
+              "end": "2026-11-10T00:30:00Z",
+              "id": "01a1c0b7-7f79-7215-b1ae-f5688a99aded",
+              "revision": 1,
+              "start": "2026-11-10T00:00:00Z",
+              "task_id": "01a1c0b5-739b-773f-819d-d216bb757d87",
+              "timezone": "Asia/Tokyo"
+            }
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "schedule-explicit-1.5b-propose": {
+      "step": "schedule-explicit-1.5b-propose",
+      "elapsed_seconds": 19.34816150200095,
+      "exit_code": 0,
+      "before": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "after": {
+        "tasks": 2,
+        "time_blocks": 0,
+        "operations": 1,
+        "sync_outbox": 3,
+        "requests": 2
+      },
+      "stdout": {
+        "applied": false,
+        "commands": 1,
+        "proposal_saved": true,
+        "request_id": "ai-01a1c0b7-015a-703a-8c79-fbd32bba3c2e"
+      },
+      "stderr": ""
+    },
+    "schedule-retry": {
+      "step": "schedule-retry",
+      "elapsed_seconds": 0.007152751000830904,
+      "exit_code": 0,
+      "before": {
+        "tasks": 2,
+        "time_blocks": 1,
+        "operations": 2,
+        "sync_outbox": 4,
+        "requests": 3
+      },
+      "after": {
+        "tasks": 2,
+        "time_blocks": 1,
+        "operations": 2,
+        "sync_outbox": 4,
+        "requests": 3
+      },
+      "stdout": {
+        "outcomes": [
+          {
+            "TimeBlock": {
+              "end": "2026-11-10T00:30:00Z",
+              "id": "01a1c0b7-7f79-7215-b1ae-f5688a99aded",
+              "revision": 1,
+              "start": "2026-11-10T00:00:00Z",
+              "task_id": "01a1c0b5-739b-773f-819d-d216bb757d87",
+              "timezone": "Asia/Tokyo"
+            }
+          }
+        ]
+      },
+      "stderr": ""
+    },
+    "schedule-undo": {
+      "step": "schedule-undo",
+      "elapsed_seconds": 0.02148356900033832,
+      "exit_code": 0,
+      "before": {
+        "tasks": 2,
+        "time_blocks": 1,
+        "operations": 2,
+        "sync_outbox": 4,
+        "requests": 3
+      },
+      "after": {
+        "tasks": 2,
+        "time_blocks": 1,
+        "operations": 2,
+        "sync_outbox": 5,
+        "requests": 3
+      },
+      "stdout": {
+        "changed": [
+          {
+            "TimeBlock": "01a1c0b7-7f79-7215-b1ae-f5688a99aded"
+          }
+        ]
+      },
+      "stderr": ""
+    }
+  },
+  "successful_proposals": {
+    "create": {
+      "format_version": 1,
+      "request_id": "ai-01a1c0b4-a6f6-7293-9915-76c60525a253",
+      "summary": "「牛乳を買う」というタスクを1件だけ作成しました。",
+      "clock": {
+        "now": "2026-11-09T14:26:47.035785195Z",
+        "timezone": "Asia/Tokyo"
+      },
+      "scope": [],
+      "commands": [
+        {
+          "CreateTask": {
+            "title": "牛乳を買う",
+            "due": null,
+            "list_id": null
+          }
+        }
+      ]
+    },
+    "schedule_explicit": {
+      "format_version": 1,
+      "request_id": "ai-01a1c0b7-015a-703a-8c79-fbd32bba3c2e",
+      "summary": "選択したタスクに2026年11月10日午前9時から30分間、Asia/Tokyoの作業枠を割り当ててください。",
+      "clock": {
+        "now": "2026-11-09T14:29:22.025906476Z",
+        "timezone": "Asia/Tokyo"
+      },
+      "scope": [
+        {
+          "id": {
+            "Task": "01a1c0b5-739b-773f-819d-d216bb757d87"
+          },
+          "revision": 1
+        }
+      ],
+      "commands": [
+        {
+          "ScheduleTask": {
+            "task_id": "01a1c0b5-739b-773f-819d-d216bb757d87",
+            "expected_task_revision": 1,
+            "start": "2026-11-10T00:00:00Z",
+            "end": "2026-11-10T00:30:00Z",
+            "timezone": "Asia/Tokyo"
+          }
+        }
+      ]
+    }
+  },
+  "diagnostic_0_5b_response_content": "{\n  \"summary\": \"「牛乳を買う」というタスクの提案\",\n  \"commands\": [\n    {\n      \"id\": \"CreateTask\",\n      \"expected_revision\": 1,\n      \"title\": \"「牛乳を買う」というタスク\",\n      \"due\": null,\n      \"list_id\": null\n    }\n  ]\n}",
+  "scheduled_database": [
+    {
+      "id": "01a1c0b7-7f79-7215-b1ae-f5688a99aded",
+      "task_id": "01a1c0b5-739b-773f-819d-d216bb757d87",
+      "start_utc": "2026-11-10T00:00:00.000000000Z",
+      "end_utc": "2026-11-10T00:30:00.000000000Z",
+      "timezone": "Asia/Tokyo",
+      "revision": 1,
+      "deleted": 0
+    }
+  ],
+  "final_database": {
+    "active_tasks": [
+      {
+        "id": "01a1c0b5-739b-773f-819d-d216bb757d87",
+        "title": "資料を確認する",
+        "completed": 0,
+        "due_json": null,
+        "revision": 1
+      }
+    ],
+    "active_time_blocks": 0
+  },
+  "adapter_output_mode": "Legacy response_format json_object; this was the default before adding derived JSON Schema. Current equivalent requires structured_output:false."
+}
