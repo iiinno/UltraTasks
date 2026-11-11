@@ -22,10 +22,6 @@ jobs:
       run:
         shell: powershell
     env:
-      CARGO_HOME: ${{ runner.temp }}/ultratasks-cargo
-      CARGO_TARGET_DIR: ${{ runner.temp }}/ultratasks-target
-      EVIDENCE_DIR: ${{ runner.temp }}/ultratasks-evidence
-      RELEASE_DIR: ${{ runner.temp }}/ultratasks-release
       CARGO_TERM_COLOR: never
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +32,13 @@ jobs:
           if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or $env:RUNNER_OS -ne 'Windows') {
             throw 'This workflow requires a GitHub-hosted Windows runner.'
           }
-          "version=$env:ImageVersion" >> $env:GITHUB_OUTPUT
+          @(
+            "CARGO_HOME=$env:RUNNER_TEMP/ultratasks-cargo",
+            "CARGO_TARGET_DIR=$env:RUNNER_TEMP/ultratasks-target",
+            "EVIDENCE_DIR=$env:RUNNER_TEMP/ultratasks-evidence",
+            "RELEASE_DIR=$env:RUNNER_TEMP/ultratasks-release"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "version=$env:ImageVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         id: image
       - name: Check artifact trust policy with synthetic API responses
         timeout-minutes: 2
@@ -137,6 +139,7 @@ jobs:
           & ./scripts/verify.ps1 -Mode full -GuiMode Skip -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/verify"
           exit $LASTEXITCODE
       - name: Package verified Windows executables
+        id: package
         if: >-
           ${{ success() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
               github.repository == 'iiinno/UltraTasks' &&
@@ -176,31 +179,9 @@ jobs:
           })
           $package = [ordered]@{ source_sha = $env:GITHUB_SHA; run_id = $env:GITHUB_RUN_ID; run_attempt = $env:GITHUB_RUN_ATTEMPT; files = $packageFiles }
           [IO.File]::WriteAllText((Join-Path $env:RELEASE_DIR 'package-manifest.json'), ($package | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
-      - name: Measure spread on this runner using the verified executable
-        if: >-
-          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
-              github.repository == 'iiinno/UltraTasks' &&
-              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
-        timeout-minutes: 35
-        run: |
-          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
-          & ./scripts/performance.ps1 -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/performance-spread" -Mode Core -Sizes '1000,10000' -Distribution spread -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo -Warmup 100 -Samples 1000 -Trials 5 -TimeoutMs 5000 -RunTimeoutSeconds 1800 -Binary "$release/ultratasks-desktop.exe" -MeasureBinary "$release/examples/measure.exe" -BuildManifest "$release/verified-build.json"
-          exit $LASTEXITCODE
-      - name: Measure dense on this runner using the same executable
-        if: >-
-          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
-              github.repository == 'iiinno/UltraTasks' &&
-              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
-        timeout-minutes: 35
-        run: |
-          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
-          & ./scripts/performance.ps1 -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/performance-dense" -Mode Core -Sizes '1000,10000' -Distribution dense -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo -Warmup 100 -Samples 1000 -Trials 5 -TimeoutMs 5000 -RunTimeoutSeconds 1800 -Binary "$release/ultratasks-desktop.exe" -MeasureBinary "$release/examples/measure.exe" -BuildManifest "$release/verified-build.json"
-          exit $LASTEXITCODE
       - name: Upload verified executables (no database or credentials)
         if: >-
-          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' && steps.package.outcome == 'success' &&
               github.repository == 'iiinno/UltraTasks' &&
               (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
               (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
@@ -224,6 +205,28 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+      - name: Measure spread on this runner using the verified executable
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 35
+        run: |
+          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
+          & ./scripts/performance.ps1 -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/performance-spread" -Mode Core -Sizes '1000,10000' -Distribution spread -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo -Warmup 100 -Samples 1000 -Trials 5 -TimeoutMs 5000 -RunTimeoutSeconds 1800 -Binary "$release/ultratasks-desktop.exe" -MeasureBinary "$release/examples/measure.exe" -BuildManifest "$release/verified-build.json"
+          exit $LASTEXITCODE
+      - name: Measure dense on this runner using the same executable
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 35
+        run: |
+          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
+          & ./scripts/performance.ps1 -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/performance-dense" -Mode Core -Sizes '1000,10000' -Distribution dense -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo -Warmup 100 -Samples 1000 -Trials 5 -TimeoutMs 5000 -RunTimeoutSeconds 1800 -Binary "$release/ultratasks-desktop.exe" -MeasureBinary "$release/examples/measure.exe" -BuildManifest "$release/verified-build.json"
+          exit $LASTEXITCODE
       - name: Upload logs and raw samples even on failure
         if: always()
         timeout-minutes: 10

@@ -1,5 +1,5 @@
 use crate::app::*;
-use gpui_kit::component::tooltip::{ManagedTooltipExt, Tooltip};
+use gpui_kit::component::tooltip::Tooltip;
 
 impl Desktop {
     pub(crate) fn agenda_panel(
@@ -190,7 +190,7 @@ impl Desktop {
                 .cursor_pointer()
                 .role(Role::Button)
                 .aria_label(accessible_label.clone())
-                .managed_tooltip(move |window, cx| {
+                .tooltip(move |window, cx| {
                     Tooltip::new(accessible_label.clone())
                         .max_w(px(420.))
                         .build(window, cx)
