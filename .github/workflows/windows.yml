@@ -142,8 +142,45 @@ jobs:
         run: |
           & ./scripts/verify.ps1 -Mode full -GuiMode Skip -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/verify"
           exit $LASTEXITCODE
+      - name: Save Rust dependencies even on failure
+        if: >-
+          ${{ !cancelled() && steps.cargo_cache.outcome == 'success' &&
+              steps.cargo_cache.outputs.cache-hit != 'true' &&
+              steps.cargo_cache.outputs.cache-primary-key != '' }}
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry/index
+            ${{ env.CARGO_HOME }}/registry/cache
+            ${{ env.CARGO_HOME }}/registry/src
+            ${{ env.CARGO_HOME }}/git/db
+            ${{ env.CARGO_HOME }}/git/checkouts
+          key: ${{ steps.cargo_cache.outputs.cache-primary-key }}
+      - name: Save release build artifacts even on failure
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' &&
+              steps.target_cache.outcome == 'success' &&
+              steps.target_cache.outputs.cache-hit != 'true' &&
+              steps.target_cache.outputs.cache-primary-key != '' }}
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}/release
+            ${{ env.CARGO_TARGET_DIR }}/x86_64-pc-windows-msvc/release
+            !${{ env.CARGO_TARGET_DIR }}/**/.ultratasks-workspace
+            !${{ env.CARGO_TARGET_DIR }}/**/verified-build.json
+            !${{ env.CARGO_TARGET_DIR }}/**/*.sqlite*
+            !${{ env.CARGO_TARGET_DIR }}/**/*.db*
+            !${{ env.CARGO_TARGET_DIR }}/**/credentials*
+            !${{ env.CARGO_TARGET_DIR }}/**/.env*
+          key: ${{ steps.target_cache.outputs.cache-primary-key }}
       - name: Package verified Windows executables
         id: package
+        shell: pwsh
         if: >-
           ${{ success() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
               github.repository == 'iiinno/UltraTasks' &&
@@ -245,39 +282,3 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           compression-level: 6
-      - name: Save Rust dependencies even on failure
-        if: >-
-          ${{ !cancelled() && steps.cargo_cache.outcome == 'success' &&
-              steps.cargo_cache.outputs.cache-hit != 'true' &&
-              steps.cargo_cache.outputs.cache-primary-key != '' }}
-        timeout-minutes: 10
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.CARGO_HOME }}/registry/index
-            ${{ env.CARGO_HOME }}/registry/cache
-            ${{ env.CARGO_HOME }}/registry/src
-            ${{ env.CARGO_HOME }}/git/db
-            ${{ env.CARGO_HOME }}/git/checkouts
-          key: ${{ steps.cargo_cache.outputs.cache-primary-key }}
-      - name: Save release build artifacts even on failure
-        if: >-
-          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' &&
-              steps.target_cache.outcome == 'success' &&
-              steps.target_cache.outputs.cache-hit != 'true' &&
-              steps.target_cache.outputs.cache-primary-key != '' }}
-        timeout-minutes: 10
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.CARGO_TARGET_DIR }}/release
-            ${{ env.CARGO_TARGET_DIR }}/x86_64-pc-windows-msvc/release
-            !${{ env.CARGO_TARGET_DIR }}/**/.ultratasks-workspace
-            !${{ env.CARGO_TARGET_DIR }}/**/verified-build.json
-            !${{ env.CARGO_TARGET_DIR }}/**/*.sqlite*
-            !${{ env.CARGO_TARGET_DIR }}/**/*.db*
-            !${{ env.CARGO_TARGET_DIR }}/**/credentials*
-            !${{ env.CARGO_TARGET_DIR }}/**/.env*
-          key: ${{ steps.target_cache.outputs.cache-primary-key }}
