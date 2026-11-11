@@ -1,0 +1,240 @@
+name: Windows
+
+on:
+  push:
+    branches: [main, prototype/pc-first]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.event_name == 'pull_request' && 'pr' || 'branch' }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Windows verification or lock-only preparation
+    runs-on: windows-2025
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: powershell
+    env:
+      CARGO_HOME: ${{ runner.temp }}/ultratasks-cargo
+      CARGO_TARGET_DIR: ${{ runner.temp }}/ultratasks-target
+      EVIDENCE_DIR: ${{ runner.temp }}/ultratasks-evidence
+      RELEASE_DIR: ${{ runner.temp }}/ultratasks-release
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a GitHub-hosted Windows runner
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or $env:RUNNER_OS -ne 'Windows') {
+            throw 'This workflow requires a GitHub-hosted Windows runner.'
+          }
+          "version=$env:ImageVersion" >> $env:GITHUB_OUTPUT
+        id: image
+      - name: Check artifact trust policy with synthetic API responses
+        timeout-minutes: 2
+        run: ./scripts/test-artifact-policy.ps1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check performance summary boundaries with synthetic data
+        timeout-minutes: 2
+        run: |
+          python -I -B ./scripts/test_summarize_performance.py
+          exit $LASTEXITCODE
+      - name: Inspect the pinned rusqlite lock without compiling
+        id: lock
+        timeout-minutes: 2
+        run: |
+          python -I ./scripts/prepare-rusqlite-lock.py inspect --workspace $env:GITHUB_WORKSPACE --evidence "$env:EVIDENCE_DIR/lock"
+          exit $LASTEXITCODE
+      - name: Require a trusted branch run for lock preparation
+        if: >-
+          ${{ steps.lock.outputs.needs_update == 'true' &&
+              !(github.repository == 'iiinno/UltraTasks' &&
+                (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+                (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first')) }}
+        run: |
+          throw 'rusqlite manifest/lock mismatch. PRs and other untrusted runs cannot produce a replacement lock. Use an approved branch push/dispatch, review its lock candidate, and commit it before full verification.'
+      - name: Cache Rust dependencies only
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry/index
+            ${{ env.CARGO_HOME }}/registry/cache
+            ${{ env.CARGO_HOME }}/registry/src
+            ${{ env.CARGO_HOME }}/git/db
+            ${{ env.CARGO_HOME }}/git/checkouts
+          key: cargo-sources-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+      - name: Cache release build artifacts
+        if: ${{ steps.lock.outputs.needs_update == 'false' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}/release
+            ${{ env.CARGO_TARGET_DIR }}/x86_64-pc-windows-msvc/release
+            !${{ env.CARGO_TARGET_DIR }}/**/.ultratasks-workspace
+            !${{ env.CARGO_TARGET_DIR }}/**/verified-build.json
+            !${{ env.CARGO_TARGET_DIR }}/**/*.sqlite*
+            !${{ env.CARGO_TARGET_DIR }}/**/*.db*
+            !${{ env.CARGO_TARGET_DIR }}/**/credentials*
+            !${{ env.CARGO_TARGET_DIR }}/**/.env*
+          key: windows-2025-${{ steps.image.outputs.version }}-rust-1.99.1-msvc-release-v1-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            windows-2025-${{ steps.image.outputs.version }}-rust-1.99.1-msvc-release-v1-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}-${{ github.sha }}-
+            windows-2025-${{ steps.image.outputs.version }}-rust-1.99.1-msvc-release-v1-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}-
+      - name: Install pinned Rust toolchain on the runner
+        timeout-minutes: 10
+        run: |
+          rustup toolchain install 1.99.1-x86_64-pc-windows-msvc --profile minimal --component rustfmt --component clippy --target x86_64-pc-windows-msvc
+          exit $LASTEXITCODE
+      - name: Prepare only the adopted rusqlite lock on the runner
+        id: lock_update
+        if: >-
+          ${{ steps.lock.outputs.needs_update == 'true' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 12
+        run: |
+          python -I ./scripts/prepare-rusqlite-lock.py update --workspace $env:GITHUB_WORKSPACE --evidence "$env:EVIDENCE_DIR/lock"
+          exit $LASTEXITCODE
+      - name: Upload the unverified lock candidate and provenance
+        if: >-
+          ${{ !cancelled() && steps.lock_update.outputs.generated == 'true' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-lock-update-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.EVIDENCE_DIR }}/lock/Cargo.lock
+            ${{ env.EVIDENCE_DIR }}/lock/lock-update.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Record that a lock update is not a verified build
+        if: ${{ !cancelled() && steps.lock.outputs.needs_update == 'true' }}
+        run: |
+          @(
+            'rusqlite manifest and lock differ. This run does not verify a release.',
+            'Full verification: NOT_RUN. Benchmark: NOT_RUN. Release artifact: NOT_RUN.',
+            'If lock preparation succeeded, review Cargo.lock and lock-update.json, commit the lock, and run --locked verification on the new SHA.'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - name: Full verification (native GUI explicitly NOT_RUN)
+        if: ${{ steps.lock.outputs.needs_update == 'false' }}
+        id: verify
+        timeout-minutes: 90
+        run: |
+          & ./scripts/verify.ps1 -Mode full -GuiMode Skip -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/verify"
+          exit $LASTEXITCODE
+      - name: Package verified Windows executables
+        if: >-
+          ${{ success() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        run: |
+          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
+          $manifest = Get-Content -LiteralPath "$release/verified-build.json" -Raw | ConvertFrom-Json
+          if ($manifest.verification -ne 'full-passed' -or $manifest.source_sha -ne $env:GITHUB_SHA -or $manifest.run_id -ne $env:GITHUB_RUN_ID -or $manifest.run_attempt -ne $env:GITHUB_RUN_ATTEMPT) { throw 'Verified build provenance mismatch.' }
+          New-Item -ItemType Directory -Path $env:RELEASE_DIR -ErrorAction Stop | Out-Null
+          foreach ($relative in @('ultratasks-desktop.exe', 'examples/measure.exe')) {
+            $source = Join-Path $release $relative
+            $entry = @($manifest.files | Where-Object { $_.name -eq [IO.Path]::GetFileName($source) })
+            if ($entry.Count -ne 1 -or (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $entry[0].sha256) { throw "Binary hash mismatch: $relative" }
+            Copy-Item -LiteralPath $source -Destination $env:RELEASE_DIR
+          }
+          Copy-Item -LiteralPath "$release/verified-build.json" -Destination $env:RELEASE_DIR
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/THIRD_PARTY_NOTICES.md" -Destination $env:RELEASE_DIR
+          Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/licenses" -Destination "$env:RELEASE_DIR/licenses" -Recurse
+          foreach ($relative in @('Start-UltraTasks.cmd', 'scripts/start-demo.ps1', 'third_party/radix-colors/LICENSE', 'third_party/lucide/LICENSE', 'design/upstream-lock.json')) {
+            $destination = Join-Path $env:RELEASE_DIR $relative
+            [void][IO.Directory]::CreateDirectory((Split-Path $destination -Parent))
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE $relative) -Destination $destination
+          }
+          $usage = @(
+            'Start-UltraTasks.cmdを開くと、同梱のビルド済みexeが起動します。Rust/Cargoは不要です。',
+            'DBは%LOCALAPPDATA%/UltraTasks/demo/demo.sqlite。既存データを保持し、新規なら空のDBで開始します。',
+            'fixture生成やローカルbuildは行いません。日付は2026-11-11、zoneはAsia/Tokyoです。',
+            'scripts/start-demo.ps1 -Date '''' で指定zoneの今日を開けます。-DbPathで別のDBを指定できます。',
+            'measure.exeはremote host専用です。CIの計測値は利用者PCの性能ではありません。',
+            'native GUI smokeはNOT_RUNです。検証SHAとexe hashはverified-build.jsonに記録しています。',
+            '通知はTHIRD_PARTY_NOTICES.md、原文はlicenses/とthird_party/にあります。'
+          ) -join "`r`n"
+          [IO.File]::WriteAllText((Join-Path $env:RELEASE_DIR 'USAGE.txt'), $usage, [Text.UTF8Encoding]::new($true))
+          $packageFiles = @(Get-ChildItem -LiteralPath $env:RELEASE_DIR -File -Recurse | ForEach-Object {
+            [ordered]@{ path = $_.FullName.Substring($env:RELEASE_DIR.Length + 1).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+          })
+          $package = [ordered]@{ source_sha = $env:GITHUB_SHA; run_id = $env:GITHUB_RUN_ID; run_attempt = $env:GITHUB_RUN_ATTEMPT; files = $packageFiles }
+          [IO.File]::WriteAllText((Join-Path $env:RELEASE_DIR 'package-manifest.json'), ($package | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
+      - name: Measure spread on this runner using the verified executable
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 35
+        run: |
+          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
+          & ./scripts/performance.ps1 -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/performance-spread" -Mode Core -Sizes '1000,10000' -Distribution spread -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo -Warmup 100 -Samples 1000 -Trials 5 -TimeoutMs 5000 -RunTimeoutSeconds 1800 -Binary "$release/ultratasks-desktop.exe" -MeasureBinary "$release/examples/measure.exe" -BuildManifest "$release/verified-build.json"
+          exit $LASTEXITCODE
+      - name: Measure dense on this runner using the same executable
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 35
+        run: |
+          $release = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
+          & ./scripts/performance.ps1 -WorkspaceRoot $env:GITHUB_WORKSPACE -TargetDir $env:CARGO_TARGET_DIR -EvidenceDir "$env:EVIDENCE_DIR/performance-dense" -Mode Core -Sizes '1000,10000' -Distribution dense -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo -Warmup 100 -Samples 1000 -Trials 5 -TimeoutMs 5000 -RunTimeoutSeconds 1800 -Binary "$release/ultratasks-desktop.exe" -MeasureBinary "$release/examples/measure.exe" -BuildManifest "$release/verified-build.json"
+          exit $LASTEXITCODE
+      - name: Upload verified executables (no database or credentials)
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' && steps.verify.outcome == 'success' &&
+              github.repository == 'iiinno/UltraTasks' &&
+              (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+              (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first') }}
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.RELEASE_DIR }}/ultratasks-desktop.exe
+            ${{ env.RELEASE_DIR }}/measure.exe
+            ${{ env.RELEASE_DIR }}/verified-build.json
+            ${{ env.RELEASE_DIR }}/THIRD_PARTY_NOTICES.md
+            ${{ env.RELEASE_DIR }}/licenses/
+            ${{ env.RELEASE_DIR }}/third_party/radix-colors/LICENSE
+            ${{ env.RELEASE_DIR }}/third_party/lucide/LICENSE
+            ${{ env.RELEASE_DIR }}/design/upstream-lock.json
+            ${{ env.RELEASE_DIR }}/Start-UltraTasks.cmd
+            ${{ env.RELEASE_DIR }}/scripts/start-demo.ps1
+            ${{ env.RELEASE_DIR }}/USAGE.txt
+            ${{ env.RELEASE_DIR }}/package-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Upload logs and raw samples even on failure
+        if: always()
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.EVIDENCE_DIR }}/**/*.log
+            ${{ env.EVIDENCE_DIR }}/**/*.json
+            ${{ env.EVIDENCE_DIR }}/**/*.jsonl
+            ${{ env.EVIDENCE_DIR }}/**/*.csv
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 6
