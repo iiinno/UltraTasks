@@ -167,8 +167,8 @@ jobs:
           $usage = @(
             'Start-UltraTasks.cmdを開くと、同梱のビルド済みexeが起動します。Rust/Cargoは不要です。',
             'DBは%LOCALAPPDATA%/UltraTasks/demo/demo.sqlite。既存データを保持し、新規なら空のDBで開始します。',
-            'fixture生成やローカルbuildは行いません。日付は2026-11-11、zoneはAsia/Tokyoです。',
-            'scripts/start-demo.ps1 -Date '''' で指定zoneの今日を開けます。-DbPathで別のDBを指定できます。',
+            'fixture生成やローカルbuildは行いません。指定zoneの今日を開き、zoneの既定はAsia/Tokyoです。',
+            'scripts/start-demo.ps1 -Date YYYY-MM-DD で特定日を、-DbPathで別のDBを指定できます。',
             'measure.exeはremote host専用です。CIの計測値は利用者PCの性能ではありません。',
             'native GUI smokeはNOT_RUNです。検証SHAとexe hashはverified-build.jsonに記録しています。',
             '通知はTHIRD_PARTY_NOTICES.md、原文はlicenses/とthird_party/にあります。'

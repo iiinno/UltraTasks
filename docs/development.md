@@ -96,7 +96,7 @@ gh api --hostname github.com "repos/iiinno/UltraTasks/actions/runs/$runId" --jq 
 
 DBは既定で`%LOCALAPPDATA%\UltraTasks\demo\demo.sqlite`。常に`--demo none`で開き、新規保存先なら空のアプリDBから始まる。fixtureやsmallデモをローカル生成しない。以前のDBは再seedせず利用し、DBが無いのにWALなどsidecarだけが残っている場合は停止する。`-DbPath`、`-EvidenceDir`で保存先を変えられる。ログは`demo/evidence`配下、表示設定はDB横の`.ui.json`に保存する。
 
-日付の既定は`2026-11-11`、timezoneは`Asia/Tokyo`。OS設定は変更しない。`-Date ''`は指定zoneの今日を使う。既存DBのデータを選択日に作り直す機能ではない。
+日付の既定は指定timezoneの今日、timezoneは`Asia/Tokyo`。OS設定は変更しない。特定日を開く場合は`-Date YYYY-MM-DD`を指定する。既存DBのデータを選択日に作り直す機能ではない。
 
 ## 明示選定したremote Windows hostで実行する場合
 

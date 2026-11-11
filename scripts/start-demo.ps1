@@ -2,7 +2,7 @@
 param(
     [string]$Binary,
     [string]$DbPath,
-    [string]$Date = '2026-11-11',
+    [string]$Date = '',
     [string]$Zone = 'Asia/Tokyo',
     [string]$WorkspaceRoot,
     [string]$TargetDir,
