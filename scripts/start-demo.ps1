@@ -59,7 +59,11 @@ try {
         if ($manifest.schema_version -ne 1 -or $manifest.verification -ne 'full-passed' -or $manifest.profile -ne 'release' -or
             $manifest.target_triple -ne 'x86_64-pc-windows-msvc' -or $manifest.toolchain -ne '1.99.1-x86_64-pc-windows-msvc' -or
             $manifest.source_sha -notmatch '^[0-9a-f]{40}$' -or $entry.Count -ne 1 -or
-            (Get-FileHash -LiteralPath $binaryPath -Algorithm SHA256).Hash -ne $entry[0].sha256) {
+            (& {
+                $stream = [IO.File]::OpenRead($binaryPath)
+                try { Get-FileHash -InputStream $stream -Algorithm SHA256 }
+                finally { $stream.Dispose() }
+            }).Hash -ne $entry[0].sha256) {
             throw 'The binary does not match its verified build manifest. Download it again from the selected run.'
         }
         $sourceSha = $manifest.source_sha

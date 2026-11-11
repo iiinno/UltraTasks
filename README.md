@@ -10,35 +10,23 @@ UIUXを重視し、Linearの情報密度と整った見た目、Google系アプ�
 
 Task・Event・TimeBlock・リスト・カレンダーの編集、Undo/Redo、検索と絞り込み、日付移動、時刻指定と最小ドラッグを実装し、正式テーマとcoreを接続した。タスク一覧は可視行を描画し、保存は専用DBスレッドで処理する。テーマはsystem/light/dark、motionはsystem/reduced/noneを選べる。
 
-統合時の確認は型確認・整形・差分確認まで。統合版の全テスト、release実行ファイルの生成、native smoke、GUI操作と性能測定は後続検証である。IME、Narrator、DPI・文字拡大、保存と再起動を実操作で検証するまで、操作品質の完成や性能目標達成は主張しない。[PCプロトタイプの状態](docs/prototype-status.md)に範囲を記載した。
+Windows release版は[CI run 43111292958](https://github.com/iiinno/UltraTasks/actions/runs/43111292958)でビルド・検証・配布・core本測定を完了した。Rustテストは101成功・0失敗。配布exeで日本語Task追加、時刻入力、完了、Undo/Redo、再起動復元、幅900指定の一覧と編集を確認した。IME変換中、Narrator、各DPI、大規模データの実GUI性能は残る確認。[PCプロトタイプの状態](docs/prototype-status.md)に配布source、測定値、試行変動、未確認範囲を記載している。
 
 ## Windowsで起動する
 
-Windows x64、Visual Studio C++ Build ToolsとWindows SDK、Rustup、Python 3が必要。PowerShellでこのリポジトリのルートから実行する。
+Windows x64用のビルド済み成果物を使う。通常利用にRust、Build Tools、Pythonは不要。
 
-```powershell
-rustup toolchain install 1.99.1-x86_64-pc-windows-msvc --profile minimal --component rustfmt --component clippy --target x86_64-pc-windows-msvc
-$workspace = (Get-Location).Path
-$output = Join-Path (Split-Path $workspace -Parent) 'out/ultratasks'
-$db = Join-Path $output 'data/dev/demo.sqlite'
-powershell.exe -NoProfile -File scripts/dev.ps1 -WorkspaceRoot $workspace -TargetDir "$output/build/integrated" -EvidenceDir "$output/evidence/dev" -DbPath $db -Demo small -Seed 42 -Date 2026-11-11 -Zone Asia/Tokyo
-```
+1. 上記の成功CIから `windows-release-7935d2dcc334c31576e81773cb724d4add277142-1` を取得する。API由来とhashを検証する取得スクリプトは[開発手順](docs/development.md#成果物を取得する)を参照。
+2. ZIPを展開し、同梱の `Start-UltraTasks.cmd` を開く。起動入口は既存exeだけを使い、ローカルビルドを行わない。
+3. `Asia/Tokyo` の今日を表示する。保存先の既定は `%LOCALAPPDATA%\UltraTasks\demo\demo.sqlite`。新しい保存先は空のDBから始まり、再起動では保存済みデータを開く。
 
-スクリプトはMSVCを検出し、release build後に同じ実行ファイルを起動する。`-Demo small`は未使用のDB向け。既存の非空DBにはseedせず、再起動では同じ保存先と`-Demo none`を指定する。
-
-```powershell
-powershell.exe -NoProfile -File scripts/dev.ps1 -WorkspaceRoot $workspace -TargetDir "$output/build/integrated" -EvidenceDir "$output/evidence/dev" -DbPath $db -Demo none -Date 2026-11-11 -Zone Asia/Tokyo
-```
-
-`--db`は絶対パス、`--zone`はIANA timezoneが必須。直接起動する場合の実行ファイルは`$output/build/integrated/x86_64-pc-windows-msvc/release/ultratasks-desktop.exe`。`--date`を省略すると指定zoneの今日を表示する。DB横の`.ui.json`に表示設定を保存する。
+起動時は常に `--demo none` を使い、デモ用fixtureを生成しない。表示設定はDB横の `.ui.json` に保存する。GitHubのartifact保持期間は14日。実装と最新の状態説明は `prototype/pc-first` ブランチにあり、mainへのマージはまだ行っていない。
 
 ## 検証と開発資料
 
-```powershell
-powershell.exe -NoProfile -File scripts/verify.ps1 -WorkspaceRoot $workspace -TargetDir "$output/build/integrated" -EvidenceDir "$output/evidence/verify" -Mode full -GuiMode Native
-```
+開発PCではRustビルド・check・test・Clippy・bench、fixture生成、重い計測を行わない。GitHub-hosted `windows-2025`、または明示選定したremote Windows hostで実行する。
 
-fullは整形、Clippy、全テスト、製品build、依存検査、native smokeを段階別に記録する。smokeはウィンドウ・初回frame・終了の確認で、GUI操作の受入とは別。[開発手順](docs/development.md)にfast、受入テスト、fixture生成とログの見方を記載した。
+full検証は整形、Clippy、全targetのテスト、製品/計測exeのbuild、依存検査を記録する。GitHub-hosted CIのnative GUIは `NOT_RUN` とし、別途行った実画面確認と区別する。[開発手順](docs/development.md)にremote検証、成果物取得、起動、ログの見方を記載した。
 
 - [性能計測の方法](docs/performance-method.md)
 - [システム実装計画・決定事項・完了条件](docs/implementation-plan.md)

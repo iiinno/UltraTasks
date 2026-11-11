@@ -154,7 +154,7 @@ python -I "$workspace/scripts/summarize-desktop.py" --input "$gui/diagnostics"
 
 初回callback／データ反映は同じ未変更fixtureの起動・通常終了を5回行い、毎回別diagnosticsディレクトリへ記録する。起動cacheは制御していないのでcold起動と呼ばない。入力検証は新しい専用fixtureで、日本語検索・追加・編集・完了・Undo/Redoを固定順に行う。CPU/メモリを併記する場合は同じObserveコマンドを`-Observation input -Seconds 30`にして5試行を採り、IME確定・文字欠落・保存成否・操作の開始/終了時刻を記録する。
 
-幅900/1280、motion有効/無効を交互に実施し、実際のclient寸法、DPI、表示Hz、motion設定を記録する。確認済みの場合だけ`$observe.Motion`や`-MonitorHz`へ値を入れる。`--window-size 900x720/1280x800`のCLI対応は別担当の統合後に実在確認する後続事項であり、上のコマンドはこの引数を使わない。現行診断だけでは実表示行数、全frame要求数、input-to-photon、実画面提示は測れないため、未観測を保持する。
+幅900/1280、motion有効/無効を交互に実施し、実際のclient寸法、DPI、表示Hz、motion設定を記録する。確認済みの場合だけ`$observe.Motion`や`-MonitorHz`へ値を入れる。`--window-size 900x720`または`--window-size 1280x800`は実装済みで、幅を指定する場合は上の起動引数に追加する。配布版の少数データで幅900指定の一覧・時刻編集は確認したが、大規模データや各DPIでの測定成功を意味しない。現行診断だけでは実表示行数、全frame要求数、input-to-photon、実画面提示は測れないため、未観測を保持する。
 
 ## 環境と残る観測
 

@@ -42,6 +42,8 @@ Cargo更新processは10分、stepは12分が上限。失敗・timeoutは来歴JS
 
 公式`actions/cache`を使い、Cargoのregistry index/cache/srcとgit依存だけをソースキャッシュにする。`CARGO_HOME`全体、認証情報、環境設定、ユーザーデータは保存しない。targetはreleaseのhost側/Windows target側を保存し、image version、Rust、triple、profile、lockとbuild設定をキーに含める。SHA/run/attemptごとの保存キーと同条件の復元prefixを使う。`.ultratasks-workspace`と過去の検証manifestは保存せず、復元後はworkspace packageだけをcleanし外部依存を再利用する。targetのDB、SQLite sidecar、credentials、`.env`は除外する。
 
+restore/saveを分離し、検証の直後、配布・長い計測の前にキャッシュ保存を試みる。検証失敗時も取消されていなければ条件に従って保存する。配布packageは日本語を含むスクリプトを正しく解釈するためPowerShell 7（`shell: pwsh`）で作成し、release artifactはpackage直後にアップロードする。これにより本測定の完了前に検証済みexeが揃う。ただし通常の取得スクリプトはrun全体の`completed/success`を引き続き要求する。
+
 runごとに以下のartifactを14日間保持する。
 
 | artifact | 内容 |
