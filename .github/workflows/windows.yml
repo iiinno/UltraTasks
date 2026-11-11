@@ -65,8 +65,10 @@ jobs:
                 (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/prototype/pc-first')) }}
         run: |
           throw 'rusqlite manifest/lock mismatch. PRs and other untrusted runs cannot produce a replacement lock. Use an approved branch push/dispatch, review its lock candidate, and commit it before full verification.'
-      - name: Cache Rust dependencies only
-        uses: actions/cache@v4
+      - name: Restore Rust dependencies only
+        id: cargo_cache
+        uses: actions/cache/restore@v4
+        continue-on-error: true
         with:
           path: |
             ${{ env.CARGO_HOME }}/registry/index
@@ -75,9 +77,11 @@ jobs:
             ${{ env.CARGO_HOME }}/git/db
             ${{ env.CARGO_HOME }}/git/checkouts
           key: cargo-sources-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-      - name: Cache release build artifacts
+      - name: Restore release build artifacts
+        id: target_cache
         if: ${{ steps.lock.outputs.needs_update == 'false' }}
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
+        continue-on-error: true
         with:
           path: |
             ${{ env.CARGO_TARGET_DIR }}/release
@@ -241,3 +245,39 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           compression-level: 6
+      - name: Save Rust dependencies even on failure
+        if: >-
+          ${{ !cancelled() && steps.cargo_cache.outcome == 'success' &&
+              steps.cargo_cache.outputs.cache-hit != 'true' &&
+              steps.cargo_cache.outputs.cache-primary-key != '' }}
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry/index
+            ${{ env.CARGO_HOME }}/registry/cache
+            ${{ env.CARGO_HOME }}/registry/src
+            ${{ env.CARGO_HOME }}/git/db
+            ${{ env.CARGO_HOME }}/git/checkouts
+          key: ${{ steps.cargo_cache.outputs.cache-primary-key }}
+      - name: Save release build artifacts even on failure
+        if: >-
+          ${{ !cancelled() && steps.lock.outputs.needs_update == 'false' &&
+              steps.target_cache.outcome == 'success' &&
+              steps.target_cache.outputs.cache-hit != 'true' &&
+              steps.target_cache.outputs.cache-primary-key != '' }}
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}/release
+            ${{ env.CARGO_TARGET_DIR }}/x86_64-pc-windows-msvc/release
+            !${{ env.CARGO_TARGET_DIR }}/**/.ultratasks-workspace
+            !${{ env.CARGO_TARGET_DIR }}/**/verified-build.json
+            !${{ env.CARGO_TARGET_DIR }}/**/*.sqlite*
+            !${{ env.CARGO_TARGET_DIR }}/**/*.db*
+            !${{ env.CARGO_TARGET_DIR }}/**/credentials*
+            !${{ env.CARGO_TARGET_DIR }}/**/.env*
+          key: ${{ steps.target_cache.outputs.cache-primary-key }}

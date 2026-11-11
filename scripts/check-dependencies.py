@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 
 KIT = {
@@ -13,6 +14,24 @@ KIT = {
 }
 CORE_NAMES = {"gpui", "gpui-pre", "gpui-fast"}
 WEBVIEW = re.compile(r"webview|webkit|(^|[-_/])wry($|[-_/])|tauri|electron|(^|[-_/])cef($|[-_/])", re.I)
+
+
+def sqlite_versions():
+    root = Path(__file__).resolve().parent.parent
+    manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+    lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
+    versions = {}
+    for name in ("rusqlite", "libsqlite3-sys"):
+        found = [package["version"] for package in lock["package"] if package["name"] == name]
+        if len(found) != 1:
+            raise ValueError(f"Cargo.lock: {name}は単一版が必要: {found}")
+        versions[name] = found[0]
+    if manifest["workspace"]["dependencies"]["rusqlite"]["version"] != f"={versions['rusqlite']}":
+        raise ValueError("Cargo.toml/Cargo.lockのrusqlite固定版が不一致")
+    sqlite = versions["libsqlite3-sys"]
+    if not re.fullmatch(r"\d+\.\d+\.\d+", sqlite) or tuple(map(int, sqlite.split("."))) < (0, 39, 0):
+        raise ValueError("libsqlite3-sysは安定版0.39.0以上が必要")
+    return versions
 
 
 def check(metadata):
@@ -50,7 +69,7 @@ def check(metadata):
         for feature in nodes[package["id"]]["features"]:
             require(not WEBVIEW.search(feature), f"WebView関連feature: {name}/{feature}")
     for name, expected in {
-        "rusqlite": "0.32.1", "libsqlite3-sys": "0.30.1", "jiff": "0.2.37",
+        **sqlite_versions(), "jiff": "0.2.37",
         "jiff-tzdb": "0.1.8", "uuid": "1.29.2", "serde": "1.0.229",
         "serde_json": "1.0.154", "futures": "0.3.34", "chrono": "0.4.45",
         "tempfile": "3.27.0",
@@ -89,7 +108,7 @@ def main():
     try:
         result = check(json.loads(args.metadata.read_text(encoding="utf-8-sig")))
     except (OSError, ValueError, KeyError, TypeError, StopIteration) as error:
-        print(f"CHECK_FAILED: metadataが不正または不完全: {error}", file=sys.stderr)
+        print(f"CHECK_FAILED: metadataまたは依存定義が不正または不完全: {error}", file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=True, indent=2))
     print("CHECK_FAILED" if result["errors"] else "CHECK_OK")

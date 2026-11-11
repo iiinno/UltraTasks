@@ -893,62 +893,61 @@ impl Desktop {
                 }
             }
             Ok(Payload::Agenda(page)) => {
-                if let ReadContext::Agenda(epoch, all_day, append) = context {
-                    if epoch
+                if let ReadContext::Agenda(epoch, all_day, append) = context
+                    && epoch
                         == if all_day {
                             self.all_day_epoch
                         } else {
                             self.agenda_epoch
                         }
-                        && page.generation.get() >= self.commit_generation
-                    {
-                        if all_day {
-                            self.all_day_loaded = true;
-                        } else {
-                            self.agenda_loaded = true;
-                        }
-                        if !all_day && !append {
-                            self.moved_from.clear();
-                            for item in &page.items {
-                                if let Some(old) = self
-                                    .agenda
-                                    .iter()
-                                    .find(|old| time::id(old) == time::id(item))
-                                    && let (Some(before), Some(after)) =
-                                        (time::span(old), time::span(item))
-                                    && before.bounds().0 != after.bounds().0
-                                {
-                                    self.moved_from.insert(time::id(item), before.bounds().0);
-                                }
+                    && page.generation.get() >= self.commit_generation
+                {
+                    if all_day {
+                        self.all_day_loaded = true;
+                    } else {
+                        self.agenda_loaded = true;
+                    }
+                    if !all_day && !append {
+                        self.moved_from.clear();
+                        for item in &page.items {
+                            if let Some(old) = self
+                                .agenda
+                                .iter()
+                                .find(|old| time::id(old) == time::id(item))
+                                && let (Some(before), Some(after)) =
+                                    (time::span(old), time::span(item))
+                                && before.bounds().0 != after.bounds().0
+                            {
+                                self.moved_from.insert(time::id(item), before.bounds().0);
                             }
                         }
-                        let (items, total, next) = if all_day {
-                            (
-                                &mut self.all_day,
-                                &mut self.all_day_total,
-                                &mut self.all_day_next,
-                            )
-                        } else {
-                            (
-                                &mut self.agenda,
-                                &mut self.agenda_total,
-                                &mut self.agenda_next,
-                            )
-                        };
-                        *total = page.total;
-                        *next = page.next;
-                        if append {
-                            for item in page.items {
-                                if !items.iter().any(|old| time::id(old) == time::id(&item)) {
-                                    items.push(item);
-                                }
+                    }
+                    let (items, total, next) = if all_day {
+                        (
+                            &mut self.all_day,
+                            &mut self.all_day_total,
+                            &mut self.all_day_next,
+                        )
+                    } else {
+                        (
+                            &mut self.agenda,
+                            &mut self.agenda_total,
+                            &mut self.agenda_next,
+                        )
+                    };
+                    *total = page.total;
+                    *next = page.next;
+                    if append {
+                        for item in page.items {
+                            if !items.iter().any(|old| time::id(old) == time::id(&item)) {
+                                items.push(item);
                             }
-                            if items.len() > 400 {
-                                items.drain(..items.len() - 400);
-                            }
-                        } else {
-                            *items = page.items;
                         }
+                        if items.len() > 400 {
+                            items.drain(..items.len() - 400);
+                        }
+                    } else {
+                        *items = page.items;
                     }
                 }
             }
