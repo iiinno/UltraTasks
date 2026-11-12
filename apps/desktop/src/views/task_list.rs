@@ -3,7 +3,7 @@ use crate::presentation::task_list::subtitle;
 use gpui_kit::{
     assets::IconName,
     component::{
-        Icon, Sizable,
+        Icon, Selectable, Sizable,
         menu::{DropdownMenu, PopupMenuItem},
     },
 };
@@ -42,6 +42,8 @@ impl Desktop {
             + usize::from(self.filters.status != StatusFilter::Open)
             + usize::from(self.filters.due != 0)
             + usize::from(self.filters.blocks != BlockFilter::Any);
+        let filtered = filter_count > 0 || !self.search.read(cx).value().is_empty();
+        let normal_empty = self.tasks.loaded && !self.task_loading && !filtered;
         let (empty_title, empty_hint) = if self.task_loading || !self.tasks.loaded {
             if self.read_error && !self.task_loading {
                 (
@@ -51,7 +53,7 @@ impl Desktop {
             } else {
                 ("タスクを読み込んでいます…", "")
             }
-        } else if filter_count > 0 || !self.search.read(cx).value().is_empty() {
+        } else if filtered {
             (
                 "条件に合うタスクがありません",
                 "検索語や絞り込みを変更してください。",
@@ -59,7 +61,7 @@ impl Desktop {
         } else {
             (
                 "未完了のタスクはありません",
-                "新規ボタンまたはCtrl+Nでタスクを追加できます。",
+                "Ctrl+Nでもタスクを作成できます。",
             )
         };
         div()
@@ -75,6 +77,50 @@ impl Desktop {
                     .gap(px(8.))
                     .border_b_1()
                     .border_color(t.border)
+                    .when(!self.calendar_view, |d| {
+                        let mut views = div()
+                            .id("task-status-views")
+                            .role(Role::Group)
+                            .aria_label("タスクの状態")
+                            .h_flex()
+                            .flex_shrink_0()
+                            .gap(px(4.));
+                        for (id, status, label) in [
+                            ("task-view-open", StatusFilter::Open, "未完了"),
+                            ("task-view-done", StatusFilter::Done, "完了"),
+                            ("task-view-any", StatusFilter::Any, "すべて"),
+                        ] {
+                            let selected = self.filters.status == status;
+                            views = views.child(
+                                button(t, id)
+                                    .h(px(28.))
+                                    .px(px(10.))
+                                    .rounded(px(9999.))
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight(510.))
+                                    .label(label)
+                                    .accessibility_label(label)
+                                    .selected(selected)
+                                    .toggled(selected)
+                                    .tab_stop(true)
+                                    .text_color(t.text_secondary)
+                                    .when(selected, |b| {
+                                        b.bg(t.selection_background).text_color(t.selection_text)
+                                    })
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.apply_filters(
+                                            Filters {
+                                                status,
+                                                ..this.filters.clone()
+                                            },
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            );
+                        }
+                        d.child(views).child(div().flex_1().min_w_0())
+                    })
                     .child(self.filter_trigger(window, cx))
                     .when(self.search_open, |d| {
                         let search_input = Styled::h(Input::new(&self.search).small(), px(28.))
@@ -167,40 +213,68 @@ impl Desktop {
                     .when(self.tasks.rows.is_empty(), |d| {
                         d.child(
                             div()
+                                .flex_1()
+                                .min_h_0()
                                 .v_flex()
-                                .items_start()
-                                .gap(px(8.))
+                                .items_center()
+                                .justify_center()
                                 .px(px(12.))
                                 .py(px(24.))
-                                .child(div().text_size(px(14.)).child(empty_title))
-                                .when(!empty_hint.is_empty(), |d| {
-                                    d.child(
-                                        div()
-                                            .text_size(px(12.))
-                                            .line_height(px(18.))
-                                            .text_color(t.text_secondary)
-                                            .child(empty_hint),
-                                    )
-                                })
-                                .when(self.tasks.loaded, |d| {
-                                    d.child(
-                                        button(t, "empty-add-task")
-                                            .ghost()
-                                            .compact()
-                                            .h(px(28.))
-                                            .icon(IconName::Plus)
-                                            .label("タスクを追加")
-                                            .disabled(
-                                                self.busy || self.info.is_none() || self.recovery,
+                                .child(
+                                    div()
+                                        .v_flex()
+                                        .items_start()
+                                        .w_full()
+                                        .max_w(px(320.))
+                                        .gap(px(12.))
+                                        .when(normal_empty, |d| {
+                                            d.child(
+                                                Icon::new(IconName::ListTodo)
+                                                    .with_size(px(28.))
+                                                    .text_color(t.text_secondary),
                                             )
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.navigate(Navigation::QuickInput, window, cx)
-                                            })),
-                                    )
-                                }),
+                                        })
+                                        .child(
+                                            div()
+                                                .text_size(px(14.))
+                                                .font_weight(FontWeight(600.))
+                                                .child(empty_title),
+                                        )
+                                        .when(!empty_hint.is_empty(), |d| {
+                                            d.child(
+                                                div()
+                                                    .text_size(px(12.))
+                                                    .line_height(px(18.))
+                                                    .text_color(t.text_secondary)
+                                                    .child(empty_hint),
+                                            )
+                                        })
+                                        .when(normal_empty, |d| {
+                                            d.child(
+                                                button(t, "empty-add-task")
+                                                    .primary()
+                                                    .h(px(32.))
+                                                    .px(px(12.))
+                                                    .icon(IconName::Plus)
+                                                    .label("タスクを作成")
+                                                    .disabled(
+                                                        self.busy
+                                                            || self.info.is_none()
+                                                            || self.recovery,
+                                                    )
+                                                    .on_click(cx.listener(|this, _, window, cx| {
+                                                        this.navigate(
+                                                            Navigation::QuickInput,
+                                                            window,
+                                                            cx,
+                                                        )
+                                                    })),
+                                            )
+                                        }),
+                                ),
                         )
                     })
-                    .child(task_list),
+                    .when(!self.tasks.rows.is_empty(), |d| d.child(task_list)),
             )
             .when(self.tasks.earlier || self.tasks.later, |d| {
                 d.child(
@@ -263,8 +337,8 @@ impl Desktop {
             })
         });
         let quick_input = Styled::h(Input::new(&self.quick), px(40.))
-            .text_size(px(20.))
-            .font_weight(FontWeight(590.))
+            .text_size(px(18.))
+            .font_weight(FontWeight(600.))
             .bg(t.surface)
             .bordered(false)
             .focus_bordered(false)
@@ -296,31 +370,12 @@ impl Desktop {
             .min_w_0()
             .px(px(6.))
             .child(
-                input_frame(self.quick.entity_id(), &self.quick.focus_handle(cx), t)
-                    .w_full()
-                    .min_w_0()
-                    .py(px(12.))
-                    .pl(px(6.))
-                    .pr(px(48.))
-                    .child(quick_input),
-            )
-            .when_some(self.quick_validation.clone(), |d, message| {
-                d.child(super::validation_message("quick-error", message, t))
-            })
-            .child(
                 div()
                     .h_flex()
+                    .min_w_0()
                     .gap(px(6.))
-                    .pt(px(6.))
+                    .py(px(6.))
                     .px(px(12.))
-                    .pb(px(12.))
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_size(px(12.))
-                            .text_color(t.text_secondary)
-                            .child("追加先"),
-                    )
                     .child(
                         button(t, "quick-list-picker")
                             .ghost()
@@ -371,8 +426,32 @@ impl Desktop {
                                     menu
                                 }
                             }),
+                    )
+                    .child(
+                        Icon::new(IconName::ChevronRight)
+                            .with_size(px(14.))
+                            .text_color(t.text_secondary),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_size(px(13.))
+                            .text_color(t.text_secondary)
+                            .child("新規タスク"),
                     ),
             )
+            .child(
+                div()
+                    .w_full()
+                    .min_w_0()
+                    .py(px(12.))
+                    .pl(px(6.))
+                    .pr(px(48.))
+                    .child(quick_input),
+            )
+            .when_some(self.quick_validation.clone(), |d, message| {
+                d.child(super::validation_message("quick-error", message, t))
+            })
             .child(
                 div()
                     .h_flex()
