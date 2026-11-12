@@ -23,6 +23,18 @@
 
 GitHub Actionsで得た時間・CPU・メモリはrunnerの値であり、開発PCの性能ではない。基準機との比較やUI応答の合格判定には別の実測が必要。[計測方法と限界](performance-method.md)を参照する。
 
+## remoteのfmt失敗を修正する
+
+`verify.ps1`は`cargo fmt --all -- --check`に成功した場合だけ後続へ進む。失敗時はfullのClippy、全targetテスト、製品/measure build、依存検査、native smoke、検証manifest作成を理由つき`NOT_RUN`にする。fastもcoreテストへ進まない。fmtの最初の非0終了コードを保持し、workflowの配布package・release upload・本測定の成功条件を満たさない。
+
+失敗したrunnerでは、整形前のcheckout SHAを確定し、追跡ファイル・未追跡ファイルの変更がないことを確認してから`cargo fmt --all`を試す。成功した場合は、その元SHAに対するGit diffをレビュー用の`fmt.patch`として保存する。日本語を含むUTF-8をPowerShellのテキスト出力で再変換せず、Gitの生バイトをコピーする。checkoutを整形した後の同じrunではbuild・認定・配布へ進まず、自動commit/pushも行わない。
+
+`windows-evidence-<checkout SHA>-<attempt>`の該当verifyディレクトリに`fmt-feedback.json`と、生成できた場合だけ`fmt.patch`を含める。JSONは元の`source_sha`、repository/run ID/attempt、toolchain、fmt check・formatter・diffの終了コード、patchの固定名・バイト数・SHA-256を記録する。候補生成に成功しても`status=GENERATED_UNVERIFIED`、`verification=FAILED`、`release_eligible=false`のまま。checkoutが既に汚れていた、formatterが失敗した、diffが空だった、UTF-8として保存できなかった等の場合は`status=FAILED`と理由を残し、最初のfmt失敗を上書きしない。実行したprocessのargv・stdout/stderrも通常のevidenceに残す。
+
+親担当はGitHub APIでrepository・head repository・event・branch・workflow path・run ID/attempt・SHA・終了状態を確認し、対象runとevidence artifactを固定して新しい空ディレクトリへ取得する。これは失敗runを含むレビュー専用の取得であり、exe取得の成功条件を緩和しない。PRではcheckoutがmerge SHAの場合もあるため、PR head SHAをそのままpatchの元SHAとして扱わず、API/checkout記録とJSONの`source_sha`を照合する。JSONは未信頼の申告として扱い、そこに書かれた外部パスを開かず、取得先内の固定名`fmt.patch`の実バイト数・SHA-256を照合する。artifact内のスクリプトは実行しない。元SHAとの一致を確認してから差分をレビュー・適用・commitし、新しいSHAでremote検証をやり直す。開発PCでrustfmtを実行する必要はない。
+
+CIではrunner確認・環境変数設定の直後、Rust準備前の必須stepとして`./scripts/test-verify-format.ps1 -EvidenceDir "$env:EVIDENCE_DIR/fmt-regression"`を実行し、終了コードをstepへ伝える。実checkoutと同じSHAの一時cloneでCargo呼出しだけを合成し、fast/fullのfmt成功・失敗、formatter失敗、空diff、事前のdirty checkout、Git diffの非0終了、不正UTF-8の拒否の9ケースを確認する。失敗時の後続`NOT_RUN`・最初の終了コードの保持、日本語patchのバイト保持・hash・元SHAへの適用可能性も検査する。Rust/Cargoは実行せず、remote guardやGitHubの識別変数も変更しない。このスクリプトは開発PCでは実行せず、ローカルではPowerShellの静的構文確認だけを行う。
+
 ## rusqliteのlockをremoteで更新する
 
 `prepare-rusqlite-lock.py`はGitHub-hosted Windows runner専用で、Python 3.12のTOML readerによりroot manifestの`workspace.dependencies.rusqlite`の厳密な`=MAJOR.MINOR.PATCH`と、既存lock内の単一のcrates.io rusqliteを照合する。更新版はmanifestから読み、workflowに別の版を固定しない。features/default-featuresもmanifestの値をCargoへそのまま渡し、来歴JSONへ記録する。
