@@ -131,6 +131,7 @@ pub(crate) struct Form {
 impl Form {
     pub(crate) fn changed(&mut self) {
         self.dirty = true;
+        self.drag_candidate = false;
         self.stamp.version += 1;
         self.validation = None;
     }
