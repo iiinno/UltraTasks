@@ -2134,7 +2134,8 @@ impl Desktop {
                         )
                     })
                     .ok();
-                let (content, quick, surface) = current.unwrap_or((None, false, transparent_black()));
+                let (content, quick, surface) =
+                    current.unwrap_or((None, false, transparent_black()));
                 let cancel = weak.clone();
                 let closed = weak.clone();
                 let top = f32::from(window.viewport_size().height) * 0.13;

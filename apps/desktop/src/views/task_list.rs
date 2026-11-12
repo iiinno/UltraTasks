@@ -38,11 +38,9 @@ impl Desktop {
         })
         .flex_1()
         .min_h_0();
-        let filter_count = usize::from(self.filters.list.is_some())
-            + usize::from(self.filters.status != StatusFilter::Open)
-            + usize::from(self.filters.due != 0)
-            + usize::from(self.filters.blocks != BlockFilter::Any);
-        let filtered = filter_count > 0 || !self.search.read(cx).value().is_empty();
+        let filtered = self.filters.due != 0
+            || self.filters.blocks != BlockFilter::Any
+            || !self.search.read(cx).value().is_empty();
         let normal_empty = self.tasks.loaded && !self.task_loading && !filtered;
         let (empty_title, empty_hint) = if self.task_loading || !self.tasks.loaded {
             if self.read_error && !self.task_loading {
@@ -60,7 +58,11 @@ impl Desktop {
             )
         } else {
             (
-                "未完了のタスクはありません",
+                match self.filters.status {
+                    StatusFilter::Open => "未完了のタスクはありません",
+                    StatusFilter::Done => "完了したタスクはありません",
+                    StatusFilter::Any => "タスクはまだありません",
+                },
                 "Ctrl+Nでもタスクを作成できます。",
             )
         };
@@ -143,42 +145,44 @@ impl Desktop {
                         )
                     }),
             )
-            .child(
-                div()
-                    .h_flex()
-                    .h(px(36.))
-                    .flex_shrink_0()
-                    .mx(px(8.))
-                    .mt(px(8.))
-                    .px(px(8.))
-                    .gap(px(8.))
-                    .rounded(px(8.))
-                    .bg(t.surface)
-                    .child(
-                        Icon::new(match self.filters.status {
-                            StatusFilter::Open => IconName::Circle,
-                            StatusFilter::Done => IconName::CircleCheck,
-                            StatusFilter::Any => IconName::ListTodo,
-                        })
-                        .with_size(px(14.))
-                        .text_color(t.text_secondary),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_size(px(13.))
-                            .font_weight(FontWeight(510.))
-                            .child(status),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(12.))
-                            .text_color(t.text_secondary)
-                            .child(count),
-                    ),
-            )
+            .when(!self.tasks.rows.is_empty(), |d| {
+                d.child(
+                    div()
+                        .h_flex()
+                        .h(px(36.))
+                        .flex_shrink_0()
+                        .mx(px(8.))
+                        .mt(px(8.))
+                        .px(px(8.))
+                        .gap(px(8.))
+                        .rounded(px(8.))
+                        .bg(t.surface)
+                        .child(
+                            Icon::new(match self.filters.status {
+                                StatusFilter::Open => IconName::Circle,
+                                StatusFilter::Done => IconName::CircleCheck,
+                                StatusFilter::Any => IconName::ListTodo,
+                            })
+                            .with_size(px(14.))
+                            .text_color(t.text_secondary),
+                        )
+                        .child(
+                            div()
+                                .flex_shrink_0()
+                                .text_size(px(13.))
+                                .font_weight(FontWeight(510.))
+                                .child(status),
+                        )
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(px(12.))
+                                .text_color(t.text_secondary)
+                                .child(count),
+                        ),
+                )
+            })
             .child(
                 div()
                     .id("task-list")
@@ -262,13 +266,15 @@ impl Desktop {
                                                             || self.info.is_none()
                                                             || self.recovery,
                                                     )
-                                                    .on_click(cx.listener(|this, _, window, cx| {
-                                                        this.navigate(
-                                                            Navigation::QuickInput,
-                                                            window,
-                                                            cx,
-                                                        )
-                                                    })),
+                                                    .on_click(cx.listener(
+                                                        |this, _, window, cx| {
+                                                            this.navigate(
+                                                                Navigation::QuickInput,
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        },
+                                                    )),
                                             )
                                         }),
                                 ),

@@ -374,9 +374,7 @@ impl Desktop {
     }
 
     pub(crate) fn filter_trigger(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let count = usize::from(self.filters.list.is_some())
-            + usize::from(self.filters.status != StatusFilter::Open)
-            + usize::from(self.filters.due != 0)
+        let count = usize::from(self.filters.due != 0)
             + usize::from(self.filters.blocks != BlockFilter::Any);
         self.popup_trigger(
             "filters-popover",
