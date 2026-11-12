@@ -81,34 +81,59 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Vec<Delta>> {
 }
 pub(crate) fn prune(connection: &Connection, now: i64, limits: Limits) -> Result<()> {
     let cutoff = now.saturating_sub(i64::from(HISTORY_DAYS) * DAY_US);
-    let mut removed = connection
-        .execute("DELETE FROM history WHERE created_us <= ?1", [cutoff])
-        .map_err(|e| storage::sql_error(StorageStage::Write, e))?;
-    removed += connection.execute("DELETE FROM history WHERE seq IN (SELECT seq FROM history ORDER BY seq DESC LIMIT -1 OFFSET ?1)", [limits.operations]).map_err(|e| storage::sql_error(StorageStage::Write,e))?;
-    let mut bytes: u64 = connection
-        .query_row(
-            "SELECT coalesce(sum(image_bytes),0) FROM history",
-            [],
-            |r| r.get(0),
-        )
-        .map_err(|e| storage::sql_error(StorageStage::Read, e))?;
-    while bytes > limits.history_bytes {
-        let (seq, size): (i64, u64) = connection
+    let mut removed = prune_selected(
+        connection,
+        "SELECT seq,actor_id,undone FROM history WHERE created_us <= ?1",
+        [cutoff],
+    )?;
+    removed += prune_selected(
+        connection,
+        "SELECT seq,actor_id,undone FROM history ORDER BY seq DESC LIMIT -1 OFFSET ?1",
+        [limits.operations],
+    )?;
+    loop {
+        let bytes: u64 = connection
             .query_row(
-                "SELECT seq,image_bytes FROM history ORDER BY seq LIMIT 1",
+                "SELECT coalesce(sum(image_bytes),0) FROM history",
                 [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| r.get(0),
             )
             .map_err(|e| storage::sql_error(StorageStage::Read, e))?;
-        removed += connection
-            .execute("DELETE FROM history WHERE seq=?1", [seq])
-            .map_err(|e| storage::sql_error(StorageStage::Write, e))?;
-        bytes = bytes.checked_sub(size).ok_or_else(storage::corrupt)?;
+        if bytes <= limits.history_bytes {
+            break;
+        }
+        removed += prune_selected(
+            connection,
+            "SELECT seq,actor_id,undone FROM history ORDER BY seq LIMIT 1",
+            [],
+        )?;
     }
     if removed != 0 {
         bump_epoch(connection)?;
     }
     Ok(())
+}
+fn prune_selected(
+    connection: &Connection,
+    selection: &str,
+    parameters: impl rusqlite::Params,
+) -> Result<usize> {
+    // Undo済み操作を失うと、そのactorの後続Redoも前提を失う。
+    connection
+        .execute(
+            &format!(
+                "WITH expired AS ({selection})
+                 DELETE FROM history WHERE seq IN (
+                     SELECT seq FROM expired
+                     UNION
+                     SELECT redo.seq FROM history AS redo
+                     JOIN expired ON redo.actor_id = expired.actor_id AND redo.seq > expired.seq
+                     WHERE redo.undone = 1 AND expired.undone = 1
+                 )"
+            ),
+            parameters,
+        )
+        .map_err(|e| storage::sql_error(StorageStage::Write, e))
 }
 pub(crate) fn bump_epoch(connection: &Connection) -> Result<()> {
     connection
