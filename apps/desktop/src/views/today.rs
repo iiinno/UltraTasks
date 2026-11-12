@@ -2,7 +2,10 @@ use crate::app::*;
 use crate::diagnostics::micros;
 use gpui_kit::{
     assets::IconName,
-    component::{Icon, Selectable, Sizable, button::Button, popover::Popover, radio::RadioGroup, tooltip::Tooltip},
+    component::{
+        Icon, Selectable, Sizable, button::Button, popover::Popover, radio::RadioGroup,
+        tooltip::Tooltip,
+    },
 };
 use std::time::Instant as Clock;
 
@@ -60,7 +63,11 @@ impl Render for Desktop {
             }
             if !compact || self.compact_agenda {
                 planner = planner.child(
-                    div().v_flex().flex_1().min_w_0().min_h_0()
+                    div()
+                        .v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
                         .child(self.agenda_panel(window, cx)),
                 );
             }
@@ -271,75 +278,97 @@ impl Desktop {
                     .text_size(px(14.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_ellipsis()
-                    .child(if self.calendar_view { "時間割".to_owned() } else { location }),
+                    .child(if self.calendar_view {
+                        "時間割".to_owned()
+                    } else {
+                        location
+                    }),
             )
-            .when(self.calendar_view, |d| d.child(
-                button(t, "previous-day")
-                    .icon(IconName::ChevronLeft)
-                    .h(px(28.))
-                    .w(px(28.))
-                    .accessibility_label("前日")
-                    .tooltip("前日 Alt+PageUp")
-                    .on_click(cx.listener(|this, _, window, cx| this.change_day(-1, window, cx))),
-            )
-            .child(self.popup_trigger(
-                "date-popover",
-                button(t, "selected-date")
-                    .h(px(28.))
-                    .label(time::date_heading(self.options.day))
-                    .accessibility_label(format!("{} 日付を移動", self.options.day.iso()))
-                    .tooltip("日付を移動 Ctrl+D"),
-                Popup::Date,
-                cx,
-            ))
-            .child(
-                button(t, "next-day")
-                    .icon(IconName::ChevronRight)
-                    .h(px(28.))
-                    .w(px(28.))
-                    .accessibility_label("翌日")
-                    .tooltip("翌日 Alt+PageDown")
-                    .on_click(cx.listener(|this, _, window, cx| this.change_day(1, window, cx))),
-            )
-            .child(
-                button(t, "today")
-                    .h(px(28.))
-                    .label("今日")
-                    .tooltip("今日へ戻る Alt+Home")
-                    .disabled(Date::today(&self.options.zone).ok() == Some(self.options.day))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        if let Ok(day) = Date::today(&this.options.zone) {
-                            this.navigate(Navigation::Day(day), window, cx);
-                        }
-                    })),
-            )
-            .child(div().mx_2().h(px(16.)).w(px(1.)).bg(t.border))
-            .child(
-                button(t, "add-event")
-                    .icon(IconName::CalendarPlus)
-                    .h(px(28.))
-                    .min_w(px(28.))
-                    .when(width >= 900., |button| button.label("予定"))
-                    .accessibility_label("予定を追加")
-                    .tooltip("予定を追加 Ctrl+Shift+E")
-                    .disabled(self.info.is_none() || self.recovery)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.navigate(Navigation::Event, window, cx)
-                    })),
-            ))
-            .when(!self.calendar_view, |d| d
-                .child(button(t, "header-search")
-                    .icon(IconName::Search).h(px(28.)).w(px(28.))
-                    .accessibility_label("タスクを検索").tooltip("タスクを検索 Ctrl+K")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.navigate(Navigation::SearchInput, window, cx)
-                    })))
-                .child(button(t, "header-new-task")
-                    .icon(IconName::Plus).h(px(28.)).label("新規タスク")
-                    .disabled(self.info.is_none() || self.recovery)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.navigate(Navigation::QuickInput, window, cx)
-                    }))))
+            .when(self.calendar_view, |d| {
+                d.child(
+                    button(t, "previous-day")
+                        .icon(IconName::ChevronLeft)
+                        .h(px(28.))
+                        .w(px(28.))
+                        .accessibility_label("前日")
+                        .tooltip("前日 Alt+PageUp")
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.change_day(-1, window, cx)),
+                        ),
+                )
+                .child(
+                    self.popup_trigger(
+                        "date-popover",
+                        button(t, "selected-date")
+                            .h(px(28.))
+                            .label(time::date_heading(self.options.day))
+                            .accessibility_label(format!("{} 日付を移動", self.options.day.iso()))
+                            .tooltip("日付を移動 Ctrl+D"),
+                        Popup::Date,
+                        cx,
+                    ),
+                )
+                .child(
+                    button(t, "next-day")
+                        .icon(IconName::ChevronRight)
+                        .h(px(28.))
+                        .w(px(28.))
+                        .accessibility_label("翌日")
+                        .tooltip("翌日 Alt+PageDown")
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.change_day(1, window, cx)),
+                        ),
+                )
+                .child(
+                    button(t, "today")
+                        .h(px(28.))
+                        .label("今日")
+                        .tooltip("今日へ戻る Alt+Home")
+                        .disabled(Date::today(&self.options.zone).ok() == Some(self.options.day))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if let Ok(day) = Date::today(&this.options.zone) {
+                                this.navigate(Navigation::Day(day), window, cx);
+                            }
+                        })),
+                )
+                .child(div().mx_2().h(px(16.)).w(px(1.)).bg(t.border))
+                .child(
+                    button(t, "add-event")
+                        .icon(IconName::CalendarPlus)
+                        .h(px(28.))
+                        .min_w(px(28.))
+                        .when(width >= 900., |button| button.label("予定"))
+                        .accessibility_label("予定を追加")
+                        .tooltip("予定を追加 Ctrl+Shift+E")
+                        .disabled(self.info.is_none() || self.recovery)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.navigate(Navigation::Event, window, cx)
+                        })),
+                )
+            })
+            .when(!self.calendar_view, |d| {
+                d.child(
+                    button(t, "header-search")
+                        .icon(IconName::Search)
+                        .h(px(28.))
+                        .w(px(28.))
+                        .accessibility_label("タスクを検索")
+                        .tooltip("タスクを検索 Ctrl+K")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.navigate(Navigation::SearchInput, window, cx)
+                        })),
+                )
+                .child(
+                    button(t, "header-new-task")
+                        .icon(IconName::Plus)
+                        .h(px(28.))
+                        .label("新規タスク")
+                        .disabled(self.info.is_none() || self.recovery)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.navigate(Navigation::QuickInput, window, cx)
+                        })),
+                )
+            })
             .into_any_element()
     }
 
@@ -353,7 +382,11 @@ impl Desktop {
             button(self.tokens, "filters")
                 .h(px(28.))
                 .icon(IconName::ListFilter)
-                .label(if count == 0 { "絞り込み".to_owned() } else { format!("絞り込み {count}") })
+                .label(if count == 0 {
+                    "絞り込み".to_owned()
+                } else {
+                    format!("絞り込み {count}")
+                })
                 .selected(count > 0),
             Popup::Filters(self.filters.clone()),
             cx,
@@ -368,10 +401,16 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let kind = std::mem::discriminant(&popup);
-        let is_open = self.popup.as_ref().is_some_and(|current| {
-            std::mem::discriminant(current) == kind
-        }) && !self.dialog_open;
-        let width = if matches!(popup, Popup::Date) { 344. } else { 384. };
+        let is_open = self
+            .popup
+            .as_ref()
+            .is_some_and(|current| std::mem::discriminant(current) == kind)
+            && !self.dialog_open;
+        let width = if matches!(popup, Popup::Date) {
+            344.
+        } else {
+            384.
+        };
         let weak = cx.weak_entity();
         Popover::new(id)
             .trigger(trigger)
@@ -384,15 +423,19 @@ impl Desktop {
             .on_open_change(cx.listener(move |this, open, window, cx| {
                 if *open {
                     this.open_popup(popup.clone(), window, cx);
-                } else if this.popup.as_ref().is_some_and(|current| {
-                    std::mem::discriminant(current) == kind
-                }) {
+                } else if this
+                    .popup
+                    .as_ref()
+                    .is_some_and(|current| std::mem::discriminant(current) == kind)
+                {
                     this.dismiss_popup(window, cx);
                 }
             }))
             .content(move |_, window, cx| {
                 weak.update(cx, |this, cx| this.popup_content(window, cx))
-                    .ok().flatten().unwrap_or_else(|| div().into_any_element())
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| div().into_any_element())
             })
             .into_any_element()
     }
@@ -505,7 +548,11 @@ impl Desktop {
             .into_any_element()
     }
 
-    pub(crate) fn popup_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(crate) fn popup_content(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let popup = self.popup.clone()?;
         let dialog_title = match &popup {
             Popup::QuickTask => "新規タスク",
@@ -532,7 +579,9 @@ impl Desktop {
             .role(Role::Group)
             .aria_label(dialog_title)
             .on_action(cx.listener(|this, _: &Cancel, window, cx| this.cancel(window, cx)))
-            .on_action(cx.listener(|this, _: &SaveEditor, window, cx| this.save_from_keyboard(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &SaveEditor, window, cx| this.save_from_keyboard(window, cx)),
+            )
             .on_key_up(cx.listener(|this, _, _, _| {
                 this.quick_ready = true;
                 this.date_ready = true;

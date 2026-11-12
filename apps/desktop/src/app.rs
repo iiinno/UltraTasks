@@ -1407,7 +1407,10 @@ impl Desktop {
             };
             let data = TaskData {
                 title: Title::new(&title)?,
-                list: self.quick_list.or(self.filters.list).unwrap_or(info.default_list),
+                list: self
+                    .quick_list
+                    .or(self.filters.list)
+                    .unwrap_or(info.default_list),
                 status: TaskStatus::Open,
                 due: None,
             };
@@ -1759,7 +1762,10 @@ impl Desktop {
         match nav {
             Navigation::QuickInput => {
                 if self.quick_list.is_none() {
-                    self.quick_list = self.filters.list.or_else(|| self.info.as_ref().map(|info| info.default_list));
+                    self.quick_list = self
+                        .filters
+                        .list
+                        .or_else(|| self.info.as_ref().map(|info| info.default_list));
                 }
                 self.open_popup(Popup::QuickTask, window, cx);
                 self.quick.update(cx, |input, cx| input.focus(window, cx));
@@ -2119,9 +2125,14 @@ impl Desktop {
             self.dialog_open = true;
             let weak = cx.weak_entity();
             window.open_dialog(cx, move |dialog, window, cx| {
-                let current = weak.update(cx, |this, cx| {
-                    (this.popup_content(window, cx), matches!(this.popup, Some(Popup::QuickTask)))
-                }).ok();
+                let current = weak
+                    .update(cx, |this, cx| {
+                        (
+                            this.popup_content(window, cx),
+                            matches!(this.popup, Some(Popup::QuickTask)),
+                        )
+                    })
+                    .ok();
                 let (content, quick) = current.unwrap_or((None, false));
                 let cancel = weak.clone();
                 let closed = weak.clone();
@@ -2134,12 +2145,14 @@ impl Desktop {
                     .entrance(gpui_kit::component::dialog::DialogEntrance::None)
                     .on_ok(|_, _, _| false)
                     .on_cancel(move |_, window, cx| {
-                        cancel.update(cx, |this, cx| {
-                            if !this.composing(window, cx) {
-                                this.dismiss_popup(window, cx);
-                            }
-                            false
-                        }).unwrap_or(true)
+                        cancel
+                            .update(cx, |this, cx| {
+                                if !this.composing(window, cx) {
+                                    this.dismiss_popup(window, cx);
+                                }
+                                false
+                            })
+                            .unwrap_or(true)
                     })
                     .on_close(move |_, _, cx| {
                         let _ = closed.update(cx, |this, cx| {
@@ -2189,7 +2202,11 @@ impl Desktop {
             self.status = "仮配置を取り消しました".into();
             self.restore_focus(window, cx);
         } else if self.form.is_some() {
-            let destination = if self.calendar_view { Navigation::Calendar } else { Navigation::Tasks };
+            let destination = if self.calendar_view {
+                Navigation::Calendar
+            } else {
+                Navigation::Tasks
+            };
             self.navigate(destination, window, cx);
         } else {
             self.list_focus.focus(window, cx);

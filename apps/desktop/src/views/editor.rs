@@ -726,35 +726,33 @@ impl Desktop {
             .disabled(self.busy)
             .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
                 let cancel_view = weak.clone();
-                let menu = menu.item(
-                    PopupMenuItem::new("取消")
-                        .icon(IconName::X)
-                        .on_click(move |_, window, cx| {
-                            let _ = cancel_view.update(cx, |this, cx| {
-                                if this.busy {
-                                    return;
-                                }
-                                let navigation = if this.calendar_view {
-                                    Navigation::Calendar
-                                } else {
-                                    Navigation::Tasks
-                                };
-                                this.navigate(navigation, window, cx);
-                            });
-                        }),
-                );
+                let menu = menu.item(PopupMenuItem::new("取消").icon(IconName::X).on_click(
+                    move |_, window, cx| {
+                        let _ = cancel_view.update(cx, |this, cx| {
+                            if this.busy {
+                                return;
+                            }
+                            let navigation = if this.calendar_view {
+                                Navigation::Calendar
+                            } else {
+                                Navigation::Tasks
+                            };
+                            this.navigate(navigation, window, cx);
+                        });
+                    },
+                ));
                 if let Some(target) = delete.clone() {
                     let delete_view = weak.clone();
                     menu.item(PopupMenuItem::separator()).item(
-                        PopupMenuItem::new("削除")
-                            .icon(IconName::Trash)
-                            .on_click(move |_, window, cx| {
+                        PopupMenuItem::new("削除").icon(IconName::Trash).on_click(
+                            move |_, window, cx| {
                                 let _ = delete_view.update(cx, |this, cx| {
                                     if !this.busy {
                                         this.open_popup(Popup::Delete(target.clone()), window, cx);
                                     }
                                 });
-                            }),
+                            },
+                        ),
                     )
                 } else {
                     menu

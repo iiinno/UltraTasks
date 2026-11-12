@@ -331,11 +331,7 @@ impl Desktop {
                             .min_w_0()
                             .max_w(px(320.))
                             .icon(IconName::List)
-                            .label(
-                                collection
-                                    .clone()
-                                    .unwrap_or_else(|| "リストを選択".into()),
-                            )
+                            .label(collection.clone().unwrap_or_else(|| "リストを選択".into()))
                             .accessibility_label("タスクの追加先リストを選択")
                             .tooltip(
                                 collection
@@ -392,9 +388,7 @@ impl Desktop {
                             .accessibility_label("タスクを作成")
                             .tooltip("タスクを作成 · Enter")
                             .disabled(self.busy || self.info.is_none() || self.recovery)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.add_task(window, cx)
-                            })),
+                            .on_click(cx.listener(|this, _, window, cx| this.add_task(window, cx))),
                     ),
             )
             .into_any_element()
