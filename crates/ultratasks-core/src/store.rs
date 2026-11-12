@@ -857,8 +857,19 @@ impl Store {
                 }
             };
             let total = selection.count(&s.connection)?;
-            let PageEdges { previous, next } =
-                s.cursors(&selection, &keys, &fingerprint, generation)?;
+            let PageEdges { previous, next } = if matches!(page.position, TaskPosition::First) {
+                // FirstのキーとCOUNTは同じ読取TXなので、総件数から次頁の有無が分かる。
+                PageEdges {
+                    previous: None,
+                    next: keys
+                        .last()
+                        .filter(|_| total > keys.len() as u64)
+                        .map(|last| s.cursor(last, &fingerprint, generation))
+                        .transpose()?,
+                }
+            } else {
+                s.cursors(&selection, &keys, &fingerprint, generation)?
+            };
             let items = keys
                 .drain(..)
                 .map(|key| s.task_row(TaskId::from_bytes(key.id)?, &query.day))
