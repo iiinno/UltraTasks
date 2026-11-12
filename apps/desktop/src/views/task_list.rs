@@ -282,12 +282,12 @@ impl Desktop {
                         this.select_relative(-1, window, cx)
                     }))
                     .on_action(cx.listener(|this, _: &OpenSelected, window, cx| {
-                        if let Some(id) = this.selected {
-                            this.navigate(Navigation::Task(id), window, cx);
+                        if let Some(id) = this.tasks.visible_selection(this.selected) {
+                            this.navigate(Navigation::ListTask(id, false), window, cx);
                         }
                     }))
                     .on_action(cx.listener(|this, _: &CompleteSelected, window, cx| {
-                        if let Some(id) = this.selected {
+                        if let Some(id) = this.tasks.visible_selection(this.selected) {
                             this.toggle_task(id, window, cx);
                         }
                     }))
@@ -498,6 +498,9 @@ impl Desktop {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                            if this.tasks.visible_selection(Some(id)).is_none() {
+                                return;
+                            }
                             this.selected = Some(id);
                             this.list_focus.focus(window, cx);
                             this.start_drag(
@@ -513,7 +516,7 @@ impl Desktop {
                         if !this.suppress_click
                             && !this.drag.as_ref().is_some_and(|drag| drag.active)
                         {
-                            this.navigate(Navigation::Task(id), window, cx);
+                            this.navigate(Navigation::ListTask(id, false), window, cx);
                         }
                     })),
             )
@@ -529,7 +532,7 @@ impl Desktop {
                     .tooltip("作業時間を指定・編集")
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
-                        this.navigate(Navigation::Block(id), window, cx);
+                        this.navigate(Navigation::ListTask(id, true), window, cx);
                     })),
             )
             .into_any_element()

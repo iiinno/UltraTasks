@@ -113,9 +113,9 @@ impl Render for Desktop {
                     } else {
                         form.title_input.update(cx, |s, cx| s.focus(window, cx));
                     }
-                } else if let Some(id) = this.selected {
+                } else if let Some(id) = this.tasks.visible_selection(this.selected) {
                     this.focus_editor_input = true;
-                    this.navigate(Navigation::Task(id), window, cx);
+                    this.navigate(Navigation::ListTask(id, false), window, cx);
                 }
             }))
             .on_action(
@@ -603,31 +603,15 @@ impl Desktop {
                             .gap_2()
                             .child(button(t, "reset-filters").label("リセット").on_click(
                                 cx.listener(|this, _, window, cx| {
-                                    this.filters = Filters::default();
                                     this.popup = None;
-                                    this.tasks.held_done.clear();
-                                    this.task_epoch += 1;
-                                    this.query_tasks(
-                                        TaskPosition::First,
-                                        PageMode::Replace,
-                                        window,
-                                        cx,
-                                    );
+                                    this.apply_filters(Filters::default(), window, cx);
                                     this.restore_focus(window, cx);
                                 }),
                             ))
                             .child(button(t, "apply-filters").primary().label("適用").on_click(
                                 cx.listener(|this, _, window, cx| {
                                     if let Some(Popup::Filters(filters)) = this.popup.take() {
-                                        this.filters = filters;
-                                        this.tasks.held_done.clear();
-                                        this.task_epoch += 1;
-                                        this.query_tasks(
-                                            TaskPosition::First,
-                                            PageMode::Replace,
-                                            window,
-                                            cx,
-                                        );
+                                        this.apply_filters(filters, window, cx);
                                         this.restore_focus(window, cx);
                                     }
                                 }),

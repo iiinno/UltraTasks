@@ -21,6 +21,17 @@ pub struct TaskCache {
     pub loaded: bool,
 }
 impl TaskCache {
+    pub fn visible_selection(&self, selected: Option<TaskId>) -> Option<TaskId> {
+        selected.filter(|id| self.loaded && self.rows.iter().any(|row| row.task.key.id == *id))
+    }
+    pub fn invalidate(&mut self) {
+        self.loaded = false;
+        self.previous = None;
+        self.next = None;
+        self.earlier = false;
+        self.later = false;
+        self.held_done.clear();
+    }
     pub fn anchor(&self, list: &ListState) -> Option<(TaskId, ListOffset)> {
         let offset = list.logical_scroll_top();
         self.rows
@@ -83,6 +94,9 @@ impl TaskCache {
         self.restore(anchor, list);
     }
     pub fn refresh(&mut self, refresh: TaskRefresh, list: &ListState) {
+        if !self.loaded {
+            return;
+        }
         let anchor = self.anchor(list);
         let old = self.rows.clone();
         self.total = refresh.total;

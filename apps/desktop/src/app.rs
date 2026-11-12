@@ -88,7 +88,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", PickerApply, Some("DatePicker && !Input")),
     ]);
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Filters {
     pub list: Option<ListId>,
     pub status: StatusFilter,
@@ -181,10 +181,18 @@ pub(crate) enum Navigation {
     Event,
     Day(Date),
     Task(TaskId),
-    Block(TaskId),
+    ListTask(TaskId, bool),
     Entity(core::EntityId),
     Collection(bool),
     Quit,
+}
+impl Navigation {
+    fn is_available(&self, tasks: &TaskCache) -> bool {
+        match self {
+            Self::ListTask(id, _) => tasks.visible_selection(Some(*id)).is_some(),
+            _ => true,
+        }
+    }
 }
 #[derive(Clone)]
 pub(crate) enum Popup {
@@ -246,6 +254,7 @@ enum ReadContext {
     Agenda(u64, bool, bool),
     Collections,
     Detail(u64, bool),
+    ListDetail(u64, TaskId, bool),
     ExistingBlock(u64, TimeBlockId),
     Entity(u64),
     Conflict(FormStamp),
@@ -266,6 +275,22 @@ enum ReadScope {
     Settings,
 }
 impl ReadContext {
+    fn selection_is_current(
+        &self,
+        epoch: u64,
+        selected: Option<TaskId>,
+        tasks: &TaskCache,
+    ) -> bool {
+        match self {
+            Self::ListDetail(request, id, _) => {
+                *request == epoch && tasks.visible_selection(selected) == Some(*id)
+            }
+            Self::Detail(request, _)
+            | Self::ExistingBlock(request, _)
+            | Self::Entity(request) => *request == epoch,
+            _ => true,
+        }
+    }
     fn scope(&self) -> ReadScope {
         match self {
             Self::Open => ReadScope::Open,
@@ -274,7 +299,10 @@ impl ReadContext {
             Self::Agenda(_, true, _) => ReadScope::AllDay,
             Self::Agenda(_, false, _) => ReadScope::Agenda,
             Self::Collections => ReadScope::Collections,
-            Self::Detail(..) | Self::ExistingBlock(..) | Self::Entity(..) => ReadScope::Selection,
+            Self::Detail(..)
+            | Self::ListDetail(..)
+            | Self::ExistingBlock(..)
+            | Self::Entity(..) => ReadScope::Selection,
             Self::Conflict(..) => ReadScope::Conflict,
             Self::Recovery => ReadScope::Recovery,
             Self::Settings => ReadScope::Settings,
@@ -534,8 +562,12 @@ impl Desktop {
             window,
             |this, _, event, window, cx| {
                 if matches!(event, InputEvent::Change) {
-                    this.search_text = this.search.read(cx).value().to_string();
-                    this.task_epoch += 1;
+                    let text = this.search.read(cx).value().to_string();
+                    if this.search_text == text {
+                        return;
+                    }
+                    this.search_text = text;
+                    this.invalidate_task_scope();
                     let epoch = this.task_epoch;
                     this.search_timer = Some(cx.spawn_in(window, async move |weak, cx| {
                         cx.background_executor()
@@ -543,7 +575,6 @@ impl Desktop {
                             .await;
                         let _ = weak.update_in(cx, |this, window, cx| {
                             if this.task_epoch == epoch {
-                                this.tasks.held_done.clear();
                                 this.query_tasks(
                                     TaskPosition::First,
                                     PageMode::Replace,
@@ -553,6 +584,7 @@ impl Desktop {
                             }
                         });
                     }));
+                    cx.notify();
                 }
             },
         ));
@@ -733,9 +765,12 @@ impl Desktop {
             ReadContext::Tasks(epoch, _) | ReadContext::Rows(epoch) => *epoch == self.task_epoch,
             ReadContext::Agenda(epoch, true, _) => *epoch == self.all_day_epoch,
             ReadContext::Agenda(epoch, false, _) => *epoch == self.agenda_epoch,
-            ReadContext::Detail(epoch, _)
-            | ReadContext::ExistingBlock(epoch, _)
-            | ReadContext::Entity(epoch) => *epoch == self.selection_epoch,
+            ReadContext::Detail(..)
+            | ReadContext::ListDetail(..)
+            | ReadContext::ExistingBlock(..)
+            | ReadContext::Entity(..) => {
+                context.selection_is_current(self.selection_epoch, self.selected, &self.tasks)
+            }
             ReadContext::Conflict(stamp) => self
                 .form
                 .as_ref()
@@ -866,6 +901,7 @@ impl Desktop {
                 if let ReadContext::Tasks(epoch, mode) = context {
                     if epoch == self.task_epoch && page.generation.get() >= self.commit_generation {
                         self.tasks.accept(page, mode, &self.task_list);
+                        self.selected = self.tasks.visible_selection(self.selected);
                         self.diagnostics
                             .sample("task_cache", 0, 0, self.tasks.rows.len() as u64);
                     } else if self.task_pending.is_none() {
@@ -885,7 +921,9 @@ impl Desktop {
                     && rows.generation.get() >= self.commit_generation
                 {
                     self.tasks.refresh(rows, &self.task_list);
-                    if self.status == "ローカルに保存しました"
+                    self.selected = self.tasks.visible_selection(self.selected);
+                    if self.tasks.loaded
+                        && self.status == "ローカルに保存しました"
                         && self.saved_task.is_some_and(|id| {
                             !self.tasks.rows.iter().any(|row| row.task.key.id == id)
                         })
@@ -986,7 +1024,8 @@ impl Desktop {
                             Err(error) => self.fail(user_error(&error), cx),
                         }
                     }
-                } else if let ReadContext::Detail(epoch, allocate) = context
+                } else if let ReadContext::Detail(epoch, allocate)
+                | ReadContext::ListDetail(epoch, _, allocate) = context
                     && epoch == self.selection_epoch
                 {
                     let Some(info) = self.info.as_ref() else {
@@ -1117,6 +1156,31 @@ impl Desktop {
         }
         cx.notify();
     }
+    fn invalidate_task_scope(&mut self) {
+        self.task_epoch += 1;
+        self.selection_epoch += 1;
+        self.selected = None;
+        self.focus_editor_input = false;
+        self.task_pending = None;
+        self.search_timer = None;
+        self.tasks.invalidate();
+        self.clear_read_error(ReadScope::Tasks);
+        self.clear_read_error(ReadScope::Rows);
+        self.clear_read_error(ReadScope::Selection);
+    }
+    pub(crate) fn apply_filters(
+        &mut self,
+        filters: Filters,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.filters != filters {
+            self.filters = filters;
+            self.invalidate_task_scope();
+            self.query_tasks(TaskPosition::First, PageMode::Replace, window, cx);
+        }
+        cx.notify();
+    }
     pub(crate) fn query_tasks(
         &mut self,
         position: TaskPosition,
@@ -1153,6 +1217,9 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.tasks.loaded || self.task_loading {
+            return;
+        }
         let position = if previous {
             self.tasks
                 .previous
@@ -1606,6 +1673,9 @@ impl Desktop {
         cx.notify();
     }
     pub(crate) fn toggle_task(&mut self, id: TaskId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tasks.visible_selection(Some(id)).is_none() {
+            return;
+        }
         if let Some(row) = self.tasks.rows.iter().find(|row| row.task.key.id == id) {
             let mut data = row.task.data.clone();
             data.status = if data.status == TaskStatus::Open {
@@ -1651,6 +1721,9 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !nav.is_available(&self.tasks) {
+            return;
+        }
         if self.form.as_ref().is_some_and(|f| f.dirty) || self.busy {
             self.open_popup(Popup::Leave(nav), window, cx);
             return;
@@ -1663,6 +1736,9 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !nav.is_available(&self.tasks) {
+            return;
+        }
         self.popup = None;
         self.drag = None;
         self.selection_epoch += 1;
@@ -1686,45 +1762,48 @@ impl Desktop {
             }
             Navigation::List(list) => {
                 self.compact_agenda = false;
-                if self.filters.list != list {
-                    self.filters.list = list;
-                    self.selected = None;
-                    self.tasks.held_done.clear();
-                    self.task_epoch += 1;
-                    self.query_tasks(TaskPosition::First, PageMode::Replace, window, cx);
-                }
+                self.apply_filters(
+                    Filters {
+                        list,
+                        ..self.filters.clone()
+                    },
+                    window,
+                    cx,
+                );
                 self.list_focus.focus(window, cx);
             }
             Navigation::Day(day) => {
+                let position = self
+                    .tasks
+                    .anchor(&self.task_list)
+                    .map(|(id, _)| TaskPosition::Around(id))
+                    .unwrap_or(TaskPosition::First);
                 if self.options.day != day {
+                    self.invalidate_task_scope();
                     self.agenda.clear();
                     self.all_day.clear();
                     self.agenda_loaded = false;
                     self.all_day_loaded = false;
                     self.agenda_total = 0;
                     self.all_day_total = 0;
+                } else {
+                    self.task_epoch += 1;
                 }
                 self.options.day = day;
                 self.date_input
                     .update(cx, |input, cx| input.set_value(day.iso(), window, cx));
-                self.task_epoch += 1;
-                let position = self
-                    .tasks
-                    .anchor(&self.task_list)
-                    .map(|(id, _)| TaskPosition::Around(id))
-                    .unwrap_or(TaskPosition::First);
                 self.query_tasks(position, PageMode::Replace, window, cx);
                 self.load_agenda(window, cx);
             }
-            Navigation::Task(id) | Navigation::Block(id) => {
-                let allocate = matches!(nav, Navigation::Block(_));
+            Navigation::Task(id) | Navigation::ListTask(id, _) => {
                 self.selected = Some(id);
-                self.read(
-                    Work::Detail(id),
-                    ReadContext::Detail(self.selection_epoch, allocate),
-                    window,
-                    cx,
-                );
+                let context = match nav {
+                    Navigation::ListTask(_, allocate) => {
+                        ReadContext::ListDetail(self.selection_epoch, id, allocate)
+                    }
+                    _ => ReadContext::Detail(self.selection_epoch, false),
+                };
+                self.read(Work::Detail(id), context, window, cx);
             }
             Navigation::Event => {
                 if let Some(info) = &self.info {
@@ -2050,16 +2129,15 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.tasks.rows.is_empty() {
+        if !self.tasks.loaded || self.tasks.rows.is_empty() {
             return;
         }
-        let old = self
+        let last = self.tasks.rows.len() - 1;
+        let index = self
             .selected
             .and_then(|id| self.tasks.rows.iter().position(|r| r.task.key.id == id))
-            .unwrap_or(0);
-        let index = old
-            .saturating_add_signed(delta)
-            .min(self.tasks.rows.len() - 1);
+            .map(|index| index.saturating_add_signed(delta).min(last))
+            .unwrap_or(if delta < 0 { last } else { 0 });
         self.selected = Some(self.tasks.rows[index].task.key.id);
         self.task_list.scroll_to_reveal_item(index);
         self.list_focus.focus(window, cx);
@@ -2483,6 +2561,260 @@ fn entity_summary(entity: &core::Entity, zone: &ZoneId) -> String {
         ),
         core::Entity::List(l) => format!("最新: {}", l.data.as_str()),
         core::Entity::Calendar(c) => format!("最新: {}", c.data.as_str()),
+    }
+}
+
+#[cfg(test)]
+mod task_selection_tests {
+    use super::{Navigation, ReadContext};
+    use crate::presentation::{
+        agenda,
+        task_list::{PageMode, TaskCache},
+    };
+    use gpui_kit::{ListAlignment, ListOffset, ListState, px};
+    use ultratasks_core::*;
+
+    fn query() -> TaskQuery {
+        TaskQuery {
+            day: agenda::calendar(
+                Date::parse("2026-11-12").unwrap(),
+                &ZoneId::parse("Asia/Tokyo").unwrap(),
+            )
+            .unwrap(),
+            list: None,
+            status: StatusFilter::Open,
+            due: DueFilter::Any,
+            blocks: BlockFilter::Any,
+            title_contains: None,
+        }
+    }
+    fn task(store: &mut Store, title: &str) -> Task {
+        let data = TaskData {
+            title: Title::new(title).unwrap(),
+            list: store.info().default_list,
+            status: TaskStatus::Open,
+            due: None,
+        };
+        store
+            .save_task(Save::Create {
+                id: TaskId::new().unwrap(),
+                data,
+            })
+            .unwrap()
+            .value
+    }
+    fn page(store: &mut Store, query: TaskQuery, position: TaskPosition) -> TaskPage {
+        store
+            .tasks(
+                query,
+                TaskPageRequest {
+                    size: PageSize::new(2).unwrap(),
+                    position,
+                },
+            )
+            .unwrap()
+    }
+    #[test]
+    fn query_results_reject_hidden_selection_and_old_details_but_allow_explicit_targets() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&temp.path().join("selection.sqlite")).unwrap();
+        let a = task(&mut store, "UIレビュー");
+        let b = task(&mut store, "請求書");
+        let other_list = ListId::new().unwrap();
+        store
+            .save_collection(CollectionSave::List(Save::Create {
+                id: other_list,
+                data: Title::new("別のリスト").unwrap(),
+            }))
+            .unwrap();
+        store
+            .save_task(Save::Update {
+                expected: a.key,
+                data: TaskData {
+                    list: other_list,
+                    due: Some(Due::Date(Date::parse("2026-11-12").unwrap())),
+                    ..a.data
+                },
+            })
+            .unwrap();
+        let initial = page(&mut store, query(), TaskPosition::First);
+        let earlier = agenda::calendar(
+            Date::parse("2026-11-11").unwrap(),
+            &ZoneId::parse("Asia/Tokyo").unwrap(),
+        )
+        .unwrap();
+        for (query, expected) in [
+            (
+                TaskQuery {
+                    title_contains: Some(SearchText::new("請求書").unwrap()),
+                    ..query()
+                },
+                vec![b.key.id],
+            ),
+            (
+                TaskQuery {
+                    list: Some(b.data.list),
+                    ..query()
+                },
+                vec![b.key.id],
+            ),
+            (
+                TaskQuery {
+                    due: DueFilter::Undated,
+                    ..query()
+                },
+                vec![b.key.id],
+            ),
+            (
+                TaskQuery {
+                    day: earlier,
+                    due: DueFilter::ThroughSelectedDay,
+                    ..query()
+                },
+                vec![],
+            ),
+        ] {
+            let list = ListState::new(0, ListAlignment::Top, px(168.));
+            let mut cache = TaskCache::default();
+            cache.accept(initial.clone(), PageMode::Replace, &list);
+            let selected = Some(a.key.id);
+            let old_detail = ReadContext::ListDetail(7, a.key.id, false);
+            assert!(old_detail.selection_is_current(7, selected, &cache));
+            cache.invalidate();
+            assert_eq!(cache.visible_selection(selected), None);
+            assert!(!old_detail.selection_is_current(8, selected, &cache));
+            cache.refresh(
+                store.task_rows(query.clone(), &[a.key.id, b.key.id]).unwrap(),
+                &list,
+            );
+            assert_eq!(cache.rows, initial.items);
+            assert_eq!(cache.visible_selection(selected), None);
+            cache.accept(
+                page(&mut store, query, TaskPosition::First),
+                PageMode::Replace,
+                &list,
+            );
+            assert_eq!(
+                cache.rows.iter().map(|row| row.task.key.id).collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(cache.visible_selection(selected), None);
+            for allocate in [false, true] {
+                assert!(!Navigation::ListTask(a.key.id, allocate).is_available(&cache));
+                assert!(
+                    !ReadContext::ListDetail(8, a.key.id, allocate)
+                        .selection_is_current(8, selected, &cache)
+                );
+            }
+            assert!(Navigation::Task(a.key.id).is_available(&cache));
+            for explicit in [
+                ReadContext::Detail(8, false),
+                ReadContext::Entity(8),
+                ReadContext::ExistingBlock(8, TimeBlockId::new().unwrap()),
+            ] {
+                assert!(explicit.selection_is_current(8, None, &cache));
+                assert!(!explicit.selection_is_current(9, None, &cache));
+            }
+            cache.accept(initial.clone(), PageMode::Replace, &list);
+            assert!(!old_detail.selection_is_current(8, selected, &cache));
+            let current = ReadContext::ListDetail(8, a.key.id, false);
+            assert!(current.selection_is_current(8, selected, &cache));
+            assert!(!current.selection_is_current(8, Some(b.key.id), &cache));
+        }
+    }
+    #[test]
+    fn appending_prepending_and_around_keep_visible_selection_and_scroll_anchor() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&temp.path().join("pages.sqlite")).unwrap();
+        let tasks = ["A", "B", "C", "D"].map(|title| task(&mut store, title));
+        let first = page(&mut store, query(), TaskPosition::First);
+        let second = page(
+            &mut store,
+            query(),
+            TaskPosition::After(first.next.clone().unwrap()),
+        );
+        for (initial, added, mode, selected, index) in [
+            (first.clone(), second.clone(), PageMode::Next, tasks[1].key.id, 1),
+            (second, first, PageMode::Previous, tasks[2].key.id, 0),
+        ] {
+            let list = ListState::new(0, ListAlignment::Top, px(168.));
+            let mut cache = TaskCache::default();
+            cache.accept(initial, PageMode::Replace, &list);
+            list.scroll_to(ListOffset {
+                item_ix: index,
+                offset_in_item: px(5.),
+            });
+            cache.accept(added, mode, &list);
+            assert_eq!(cache.rows.len(), 4);
+            let around = page(&mut store, query(), TaskPosition::Around(selected));
+            for replacement in [None, Some(around)] {
+                if let Some(page) = replacement {
+                    cache.accept(page, PageMode::Replace, &list);
+                }
+                assert_eq!(cache.visible_selection(Some(selected)), Some(selected));
+                assert!(
+                    ReadContext::ListDetail(3, selected, false)
+                        .selection_is_current(3, Some(selected), &cache)
+                );
+                let (anchor, offset) = cache.anchor(&list).unwrap();
+                assert_eq!(anchor, selected);
+                assert_eq!(offset.offset_in_item, px(5.));
+            }
+            let anchor = cache.anchor(&list);
+            cache.invalidate();
+            assert_eq!(cache.visible_selection(Some(selected)), None);
+            cache.accept(
+                page(&mut store, query(), TaskPosition::Around(selected)),
+                PageMode::Replace,
+                &list,
+            );
+            assert_eq!(cache.anchor(&list), anchor);
+        }
+    }
+    #[test]
+    fn row_refresh_keeps_held_done_and_rejects_selection_when_an_edit_leaves_the_filter() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&temp.path().join("refresh.sqlite")).unwrap();
+        let mut a = task(&mut store, "UIレビュー");
+        let query = TaskQuery {
+            title_contains: Some(SearchText::new("UI").unwrap()),
+            ..query()
+        };
+        let list = ListState::new(0, ListAlignment::Top, px(168.));
+        let mut cache = TaskCache::default();
+        cache.accept(
+            page(&mut store, query.clone(), TaskPosition::First),
+            PageMode::Replace,
+            &list,
+        );
+        let selected = Some(a.key.id);
+        for status in [TaskStatus::Done, TaskStatus::Open] {
+            a = store
+                .save_task(Save::Update {
+                    expected: a.key,
+                    data: TaskData { status, ..a.data },
+                })
+                .unwrap()
+                .value;
+            let rows = store.task_rows(query.clone(), &[a.key.id]).unwrap();
+            assert_eq!(rows.matching_ids.contains(&a.key.id), status == TaskStatus::Open);
+            cache.refresh(rows, &list);
+            assert_eq!(cache.visible_selection(selected), selected);
+            assert_eq!(cache.held_done.contains(&a.key.id), status == TaskStatus::Done);
+        }
+        store
+            .save_task(Save::Update {
+                expected: a.key,
+                data: TaskData {
+                    title: Title::new("請求書").unwrap(),
+                    ..a.data
+                },
+            })
+            .unwrap();
+        cache.refresh(store.task_rows(query, &[a.key.id]).unwrap(), &list);
+        assert_eq!(cache.visible_selection(selected), None);
+        assert!(!ReadContext::ListDetail(4, a.key.id, false).selection_is_current(4, selected, &cache));
+        assert!(ReadContext::Detail(4, false).selection_is_current(4, None, &cache));
     }
 }
 
