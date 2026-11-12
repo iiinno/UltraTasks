@@ -14,8 +14,7 @@ try {
     $release = Join-Path $context.Target "$($context.Triple)/release"
     $buildManifest = Join-Path $release 'verified-build.json'
     if ($Mode -eq 'full' -and (Test-Path -LiteralPath $buildManifest -PathType Leaf)) { Remove-Item -LiteralPath $buildManifest }
-    if (Initialize-WindowsEnvironment $context) {
-        [void](Invoke-WorkspaceCargo $context 'fmt' @('fmt', '--all') @('--', '--check'))
+    if ((Initialize-WindowsEnvironment $context) -and (Invoke-VerificationFormat $context $Mode)) {
         if ($Mode -eq 'fast') {
             [void](Invoke-WorkspaceCargo $context 'core-tests' @('test', '-p', 'ultratasks-core', '--release', '--locked', '--features', 'test-support,fixtures', '--target', $context.Triple))
             Add-SkippedStep $context 'native-smoke' 'fast mode does not run GUI checks'

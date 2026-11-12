@@ -185,6 +185,68 @@ function Invoke-WorkspaceCargo {
     return Invoke-LoggedStep $Context $Name (Get-Command cargo.exe -ErrorAction Stop).Source $all
 }
 
+function Invoke-VerificationFormat {
+    param($Context, [ValidateSet('fast', 'full')][string]$Mode)
+    Assert-RemoteExecution
+    $check = Invoke-WorkspaceCargo $Context 'fmt' @('fmt', '--all') @('--', '--check')
+    if ($check.exit_code -eq 0) { return $true }
+
+    $reason = 'fmt --check failed; review fmt-feedback.json and verify a new committed checkout.'
+    $remaining = if ($Mode -eq 'fast') { @('core-tests', 'native-smoke') } else {
+        @('clippy', 'all-tests', 'product-build', 'measure-build', 'dependency-metadata', 'dependency-features', 'dependency-check', 'native-smoke', 'verified-build')
+    }
+    foreach ($name in $remaining) { Add-SkippedStep $Context $name $reason }
+
+    $feedback = [ordered]@{
+        schema_version = 1; status = 'FAILED'; review_only = $true; release_eligible = $false
+        verification = 'FAILED'; mode = $Mode; check_exit_code = $check.exit_code
+        source_sha = $null; source_clean = $false; repository = $env:GITHUB_REPOSITORY
+        run_id = $env:GITHUB_RUN_ID; run_attempt = $env:GITHUB_RUN_ATTEMPT
+        toolchain = $Context.Toolchain; format_exit_code = $null; diff_exit_code = $null
+        patch = $null; error = $null
+    }
+    $patchPath = Join-Path $Context.Evidence 'fmt.patch'
+    try {
+        $feedback.source_sha = Get-WorkspaceRevision $Context
+        $git = (Get-Command git.exe -ErrorAction Stop).Source
+        $status = Invoke-LoggedStep $Context 'fmt-source-status' $git @('status', '--porcelain=v1', '--untracked-files=normal')
+        if ($status.exit_code -ne 0) { throw 'Cannot check the checkout before formatting.' }
+        if ([System.IO.File]::ReadAllText($status.stdout).Length -ne 0) {
+            throw 'Formatting feedback requires a clean checkout; existing changes are not included in a patch.'
+        }
+        $feedback.source_clean = $true
+        $format = Invoke-WorkspaceCargo $Context 'fmt-generate' @('fmt', '--all')
+        $feedback.format_exit_code = $format.exit_code
+        if ($format.exit_code -ne 0) { throw 'Formatter failed; any partial edits remain unverified and no patch is published.' }
+        if ((Get-WorkspaceRevision $Context) -ne $feedback.source_sha) { throw 'Checkout SHA changed during formatting.' }
+
+        $diff = Invoke-LoggedStep $Context 'fmt-diff' $git @('-c', 'core.quotepath=false', 'diff', '--binary', '--full-index', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '--no-relative', '--src-prefix=a/', '--dst-prefix=b/', $feedback.source_sha, '--')
+        $feedback.diff_exit_code = $diff.exit_code
+        if ($diff.exit_code -ne 0) { throw 'Cannot collect the formatting patch.' }
+        $bytes = [System.IO.File]::ReadAllBytes($diff.stdout)
+        if ($bytes.Length -eq 0) { throw 'Formatter produced no tracked diff after fmt --check failed.' }
+        $strictUtf8 = New-Object System.Text.UTF8Encoding($false, $true)
+        [void]$strictUtf8.GetString($bytes)
+        # Preserve git's UTF-8 bytes; PowerShell 5.1 text redirection would re-encode them.
+        [System.IO.File]::Copy($diff.stdout, $patchPath)
+        $feedback.patch = [ordered]@{
+            name = 'fmt.patch'; bytes = $bytes.Length
+            sha256 = (Get-FileHash -LiteralPath $patchPath -Algorithm SHA256).Hash
+        }
+        $feedback.status = 'GENERATED_UNVERIFIED'
+    } catch {
+        $feedback.error = $_.ToString()
+        [System.IO.File]::Delete($patchPath)
+        if ($null -eq $feedback.format_exit_code) { Add-SkippedStep $Context 'fmt-generate' $feedback.error }
+        if ($null -eq $feedback.diff_exit_code) { Add-SkippedStep $Context 'fmt-diff' $feedback.error }
+        Write-Host "FAILED fmt feedback: $($feedback.error)"
+    } finally {
+        Write-Utf8 (Join-Path $Context.Evidence 'fmt-feedback.json') ($feedback | ConvertTo-Json -Depth 5)
+    }
+    # A review patch never turns the original failed check into verification success.
+    return $false
+}
+
 function Initialize-WorkspaceArtifacts {
     param($Context)
     Assert-RemoteExecution

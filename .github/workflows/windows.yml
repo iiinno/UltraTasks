@@ -40,6 +40,11 @@ jobs:
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "version=$env:ImageVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         id: image
+      - name: Check format failure feedback with synthetic commands
+        timeout-minutes: 2
+        run: |
+          & ./scripts/test-verify-format.ps1 -EvidenceDir "$env:EVIDENCE_DIR/fmt-regression"
+          exit $LASTEXITCODE
       - name: Check artifact trust policy with synthetic API responses
         timeout-minutes: 2
         run: ./scripts/test-artifact-policy.ps1
@@ -279,6 +284,7 @@ jobs:
             ${{ env.EVIDENCE_DIR }}/**/*.json
             ${{ env.EVIDENCE_DIR }}/**/*.jsonl
             ${{ env.EVIDENCE_DIR }}/**/*.csv
+            ${{ env.EVIDENCE_DIR }}/**/fmt.patch
           if-no-files-found: warn
           retention-days: 14
           compression-level: 6
