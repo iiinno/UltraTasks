@@ -154,7 +154,7 @@ fn pc8_list_status_due_and_blocks_filters_are_anded_and_never_duplicate_tasks() 
                 .save_task(Save::Create {
                     id: TaskId::new().unwrap(),
                     data: TaskData {
-                        title: Title::new(&format!("日本語入力 {i}")).unwrap(),
+                        title: Title::new(&format!("日本語_%入力 {i}")).unwrap(),
                         list: if i == 2 { b.key.id } else { a.key.id },
                         status: if i == 1 {
                             TaskStatus::Done
@@ -212,8 +212,47 @@ fn pc8_list_status_due_and_blocks_filters_are_anded_and_never_duplicate_tasks() 
     q.status = StatusFilter::Open;
     q.due = DueFilter::ThroughSelectedDay;
     q.blocks = BlockFilter::InSelectedWindow;
-    q.title_contains = Some(SearchText::new("語入力").unwrap());
-    expect_tasks(&mut store, q, &ids(&[0]));
+    q.title_contains = Some(SearchText::new("語_%入力").unwrap());
+    expect_tasks(&mut store, q.clone(), &ids(&[0]));
+    q.blocks = BlockFilter::Any;
+    let first = store
+        .tasks(q.clone(), request(2, TaskPosition::First))
+        .unwrap();
+    assert_eq!(task_ids(&first), ids(&[0, 6]));
+    assert_eq!(first.total, 3);
+    assert!(first.previous.is_none());
+    assert_eq!(
+        first.items[0],
+        TaskRow {
+            task: tasks[0].clone(),
+            list_title: a.data.clone(),
+            blocks: BlockSummary {
+                total_for_task: 2,
+                in_window: 2,
+                allocated_micros_in_window: 7_200_000_000,
+                first_in_window: Some(span(
+                    "2026-11-11T09:00:00+09:00",
+                    "2026-11-11T10:00:00+09:00"
+                )),
+            },
+        }
+    );
+    let next = store
+        .tasks(
+            q.clone(),
+            request(2, TaskPosition::After(first.next.clone().unwrap())),
+        )
+        .unwrap();
+    assert_eq!(task_ids(&next), ids(&[7]));
+    assert_eq!((next.total, next.generation), (3, first.generation));
+    assert!(next.next.is_none());
+    let back = store
+        .tasks(q, request(2, TaskPosition::Before(next.previous.unwrap())))
+        .unwrap();
+    assert_eq!(back.items, first.items);
+    assert_eq!((back.total, back.generation), (3, first.generation));
+    assert!(back.previous.is_none());
+    assert_eq!(back.next, first.next);
 }
 
 #[test]
@@ -401,29 +440,50 @@ fn pc8_task_keyset_pages_move_forward_and_backward_with_exact_totals_and_stable_
 }
 
 #[test]
-fn pc8_maximum_page_returns_200_rows_and_exposes_the_201st() {
+fn pc8_first_page_edges_match_exact_totals_at_page_size_boundaries() {
     let db = Database::new();
     let mut store = db.open();
-    let tasks: Vec<_> = (0..201)
-        .map(|i| create_task(&mut store, &format!("件数境界{i}")))
-        .collect();
-    let first = store
-        .tasks(query(), request(200, TaskPosition::First))
-        .unwrap();
-    assert_eq!((first.total, first.items.len()), (201, 200));
-    assert_eq!(
-        task_ids(&first),
-        tasks[..200].iter().map(|t| t.key.id).collect::<Vec<_>>()
-    );
-    let next = store
-        .tasks(
-            query(),
-            request(200, TaskPosition::After(first.next.unwrap())),
-        )
-        .unwrap();
-    assert_eq!(task_ids(&next), vec![tasks[200].key.id]);
-    assert_eq!(next.total, 201);
-    assert!(next.next.is_none());
+    let mut tasks = Vec::new();
+    for total in [0, 1, 199, 200, 201] {
+        while tasks.len() < total {
+            tasks.push(create_task(&mut store, &format!("件数境界{}", tasks.len())));
+        }
+        let ids: Vec<_> = tasks.iter().map(|task| task.key.id).collect();
+        let generation = store.task_rows(query(), &[]).unwrap().generation;
+        for size in [1, 200] {
+            let first = store
+                .tasks(query(), request(size, TaskPosition::First))
+                .unwrap();
+            let end = usize::from(size).min(total);
+            assert_eq!((first.total, first.items.len()), (total as u64, end));
+            assert_eq!(
+                first.items.iter().map(|row| &row.task).collect::<Vec<_>>(),
+                tasks[..end].iter().collect::<Vec<_>>()
+            );
+            assert_eq!(first.generation, generation);
+            assert!(first.previous.is_none());
+            assert_eq!(first.next.is_some(), total > end);
+            if let Some(cursor) = first.next.clone() {
+                let next = store
+                    .tasks(query(), request(size, TaskPosition::After(cursor)))
+                    .unwrap();
+                let next_end = (end + usize::from(size)).min(total);
+                assert_eq!(task_ids(&next), ids[end..next_end]);
+                assert_eq!((next.total, next.generation), (total as u64, generation));
+                assert_eq!(next.next.is_some(), total > next_end);
+                let back = store
+                    .tasks(
+                        query(),
+                        request(size, TaskPosition::Before(next.previous.unwrap())),
+                    )
+                    .unwrap();
+                assert_eq!(back.items, first.items);
+                assert_eq!((back.total, back.generation), (total as u64, generation));
+                assert!(back.previous.is_none());
+                assert_eq!(back.next, first.next);
+            }
+        }
+    }
 }
 
 #[test]
