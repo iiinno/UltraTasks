@@ -9,11 +9,7 @@ use gpui_kit::{
 };
 
 impl Desktop {
-    pub(crate) fn task_panel(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    pub(crate) fn task_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let t = self.tokens;
         let status = match self.filters.status {
             StatusFilter::Open => "未完了",

@@ -55,8 +55,10 @@ pub(crate) fn menu_trigger(
     let focus = state.read(cx).clone();
     trigger
         .track_focus(&focus)
-        .on_a11y_action(accesskit::Action::Click, move |_, window, cx| {
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(move |_, window, cx| {
             if !disabled {
+                cx.stop_propagation();
                 focus.dispatch_action(
                     &gpui_kit::base::actions::Confirm { secondary: false },
                     window,
