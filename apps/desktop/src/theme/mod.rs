@@ -130,8 +130,8 @@ fn apply_tokens(theme: &mut Theme, t: &Tokens, contrast: Option<&SystemColors>) 
     c.drag_border = t.focus_ring;
     c.drop_target = t.selection_background;
     c.scrollbar = t.canvas;
-    c.scrollbar_thumb = t.border;
-    c.scrollbar_thumb_hover = t.text_secondary;
+    c.scrollbar_thumb = t.text_secondary;
+    c.scrollbar_thumb_hover = t.text_primary;
     c.sidebar = t.surface;
     c.sidebar_foreground = t.text_secondary;
     c.sidebar_border = t.border;
@@ -208,6 +208,17 @@ mod tests {
         let a = luminance(foreground);
         let b = luminance(background);
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    #[test]
+    fn scrollbar_thumb_is_distinct_in_both_appearances() {
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            let t = resolve(mode, false, None);
+            let mut theme = Theme::default();
+            apply_tokens(&mut theme, &t, None);
+            assert!(contrast(theme.scrollbar_thumb, theme.scrollbar) >= 3.0);
+            assert!(contrast(theme.scrollbar_thumb_hover, theme.scrollbar) >= 3.0);
+        }
     }
 
     #[test]

@@ -64,18 +64,13 @@ impl Desktop {
                                 .text_color(t.text_secondary)
                                 .child(label),
                         )
-                        .child(
-                            div()
-                                .absolute()
-                                .left(px(56.))
-                                .right_0()
-                                .h(px(1.))
-                                .bg(if t.canvas == t.surface_hover {
-                                    t.border
-                                } else {
-                                    t.surface_hover
-                                }),
-                        ),
+                        .child(div().absolute().left(px(56.)).right_0().h(px(1.)).bg(
+                            if t.canvas == t.surface_hover {
+                                t.border
+                            } else {
+                                t.surface_hover
+                            },
+                        )),
                 );
             }
         }
@@ -384,13 +379,7 @@ impl Desktop {
             .overflow_hidden()
             .text_size(px(12.))
             .text_color(t.text_secondary)
-            .child(
-                div()
-                    .w(px(48.))
-                    .flex_shrink_0()
-                    .text_right()
-                    .child("終日"),
-            );
+            .child(div().w(px(48.)).flex_shrink_0().text_right().child("終日"));
         if self.all_day.is_empty() {
             all_day = all_day.child(if self.all_day_loading {
                 "読み込み中…"

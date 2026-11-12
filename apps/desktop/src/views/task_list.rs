@@ -99,7 +99,9 @@ impl Desktop {
                     let invalid = item.text().is_some_and(|text| text.contains(['\r', '\n']));
                     if invalid {
                         let _ = weak.update(cx, |this, cx| {
-                            let message = "タイトルは1行で入力してください。貼付前の入力を保持しています".to_owned();
+                            let message =
+                                "タイトルは1行で入力してください。貼付前の入力を保持しています"
+                                    .to_owned();
                             this.quick_validation = Some(message.clone());
                             this.fail(message, cx);
                         });
@@ -422,13 +424,21 @@ impl Desktop {
                 } else {
                     t.surface_hover
                 })
-                .when(t.canvas == t.surface_hover, |s| s.border_color(t.focus_ring))
+                .border_color(if t.canvas == t.surface_hover {
+                    t.focus_ring
+                } else {
+                    transparent_black()
+                })
             })
             .child(
                 button(t, SharedString::from(format!("done-{id}")))
                     .ghost()
                     .compact()
-                    .icon(if done { IconName::CircleCheck } else { IconName::Circle })
+                    .icon(if done {
+                        IconName::CircleCheck
+                    } else {
+                        IconName::Circle
+                    })
                     .accessibility_label(format!(
                         "{} {}",
                         title,

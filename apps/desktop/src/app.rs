@@ -1687,6 +1687,7 @@ impl Desktop {
                 self.compact_agenda = false;
                 if self.filters.list != list {
                     self.filters.list = list;
+                    self.selected = None;
                     self.tasks.held_done.clear();
                     self.task_epoch += 1;
                     self.query_tasks(TaskPosition::First, PageMode::Replace, window, cx);

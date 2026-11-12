@@ -78,6 +78,7 @@ impl Desktop {
                     rail,
                     self.filters.list.is_none(),
                 )
+                .toggled(self.filters.list.is_none())
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.navigate(Navigation::List(None), window, cx)
                 })),
@@ -96,6 +97,7 @@ impl Desktop {
                     rail,
                     self.filters.list == Some(id),
                 )
+                .toggled(self.filters.list == Some(id))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.navigate(Navigation::List(Some(id)), window, cx)
                 })),
@@ -229,9 +231,11 @@ impl Desktop {
                                     matches!(self.popup, Some(Popup::Collections)),
                                 )
                                 .disabled(self.info.is_none())
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.open_popup(Popup::Collections, window, cx)
-                                })),
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
+                                        this.open_popup(Popup::Collections, window, cx)
+                                    },
+                                )),
                             )
                             .child(
                                 sidebar_item(
@@ -242,13 +246,15 @@ impl Desktop {
                                     rail,
                                     matches!(self.popup, Some(Popup::Settings(_))),
                                 )
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.open_popup(
-                                        Popup::Settings(this.settings.clone()),
-                                        window,
-                                        cx,
-                                    )
-                                })),
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
+                                        this.open_popup(
+                                            Popup::Settings(this.settings.clone()),
+                                            window,
+                                            cx,
+                                        )
+                                    },
+                                )),
                             ),
                     ),
             )

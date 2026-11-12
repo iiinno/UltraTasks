@@ -411,9 +411,11 @@ impl Desktop {
                                     } else {
                                         "start-overlap"
                                     })
-                                    .children([earlier, later].map(|label| {
-                                        Radio::from(label).small().text_size(px(13.))
-                                    }))
+                                    .children(
+                                        [earlier, later].map(|label| {
+                                            Radio::from(label).small().text_size(px(13.))
+                                        }),
+                                    )
                                     .selected_index(match selected {
                                         OverlapChoice::Reject => None,
                                         OverlapChoice::Earlier => Some(0),
@@ -648,9 +650,7 @@ impl Desktop {
                                         form.title_input.read(cx).value().to_string(),
                                     )
                                     .chain(
-                                        form.fields
-                                            .iter()
-                                            .map(|f| f.read(cx).value().to_string()),
+                                        form.fields.iter().map(|f| f.read(cx).value().to_string()),
                                     )
                                     .collect::<Vec<_>>()
                                     .join("\n");

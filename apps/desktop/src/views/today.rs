@@ -40,12 +40,7 @@ impl Render for Desktop {
         let width = f32::from(window.viewport_size().width);
         let rail = width < 1000.;
         let compact = width < 780.;
-        let mut columns = div()
-            .h_flex()
-            .items_stretch()
-            .flex_1()
-            .min_w_0()
-            .min_h_0();
+        let mut columns = div().h_flex().items_stretch().flex_1().min_w_0().min_h_0();
         if !compact || !self.compact_agenda {
             let left = if self.form.is_some() {
                 self.editor_panel(window, cx)
@@ -239,12 +234,14 @@ impl Desktop {
             .filters
             .list
             .and_then(|id| {
-                self.collections.iter().find_map(|collection| match collection {
-                    Collection::List(list) if list.key.id == id => {
-                        Some(list.data.as_str().to_owned())
-                    }
-                    _ => None,
-                })
+                self.collections
+                    .iter()
+                    .find_map(|collection| match collection {
+                        Collection::List(list) if list.key.id == id => {
+                            Some(list.data.as_str().to_owned())
+                        }
+                        _ => None,
+                    })
             })
             .unwrap_or_else(|| {
                 if self.filters.list.is_some() {
@@ -279,9 +276,7 @@ impl Desktop {
                     .w(px(28.))
                     .accessibility_label("前日")
                     .tooltip("前日 Alt+PageUp")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.change_day(-1, window, cx)
-                    })),
+                    .on_click(cx.listener(|this, _, window, cx| this.change_day(-1, window, cx))),
             )
             .child(
                 button(t, "selected-date")
@@ -301,9 +296,9 @@ impl Desktop {
                         time::date_heading(self.options.day)
                     ))
                     .tooltip("日付を移動 Ctrl+D")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_popup(Popup::Date, window, cx)
-                    })),
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.open_popup(Popup::Date, window, cx)),
+                    ),
             )
             .child(
                 button(t, "next-day")
@@ -312,9 +307,7 @@ impl Desktop {
                     .w(px(28.))
                     .accessibility_label("翌日")
                     .tooltip("翌日 Alt+PageDown")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.change_day(1, window, cx)
-                    })),
+                    .on_click(cx.listener(|this, _, window, cx| this.change_day(1, window, cx))),
             )
             .child(
                 button(t, "today")
@@ -372,7 +365,11 @@ impl Desktop {
                     .min_w_0()
                     .text_size(px(12.))
                     .line_height(px(18.))
-                    .text_color(if self.error { t.error_text } else { t.text_secondary })
+                    .text_color(if self.error {
+                        t.error_text
+                    } else {
+                        t.text_secondary
+                    })
                     .when(self.error, |d| d.bg(t.error_background))
                     .role(Role::Status)
                     .aria_label(status.clone())
@@ -394,16 +391,23 @@ impl Desktop {
                         })),
                 )
             })
-            .when(self.recovery || self.retryable_write() || self.read_error, |d| {
-                d.child(
-                    button(t, "retry")
-                        .h(px(24.))
-                        .icon(IconName::RefreshCw)
-                        .label(if self.recovery { "保存先を開き直す" } else { "再試行" })
-                        .disabled(self.busy)
-                        .on_click(cx.listener(|this, _, window, cx| this.retry(window, cx))),
-                )
-            })
+            .when(
+                self.recovery || self.retryable_write() || self.read_error,
+                |d| {
+                    d.child(
+                        button(t, "retry")
+                            .h(px(24.))
+                            .icon(IconName::RefreshCw)
+                            .label(if self.recovery {
+                                "保存先を開き直す"
+                            } else {
+                                "再試行"
+                            })
+                            .disabled(self.busy)
+                            .on_click(cx.listener(|this, _, window, cx| this.retry(window, cx))),
+                    )
+                },
+            )
             .child(
                 button(t, "undo")
                     .icon(IconName::Undo2)
@@ -418,9 +422,9 @@ impl Desktop {
                             .unwrap_or_else(|| "戻せる操作はありません".into()),
                     )
                     .disabled(self.history.undo.is_none() || self.busy || self.recovery)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.history_action(false, window, cx)
-                    })),
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.history_action(false, window, cx)),
+                    ),
             )
             .child(
                 button(t, "redo")
@@ -436,9 +440,9 @@ impl Desktop {
                             .unwrap_or_else(|| "やり直せる操作はありません".into()),
                     )
                     .disabled(self.history.redo.is_none() || self.busy || self.recovery)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.history_action(true, window, cx)
-                    })),
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.history_action(true, window, cx)),
+                    ),
             )
             .into_any_element()
     }
@@ -852,9 +856,10 @@ impl Desktop {
                         Collection::List(list) => {
                             (IconName::List, format!("リスト · {}", list.data.as_str()))
                         }
-                        Collection::Calendar(cal) => {
-                            (IconName::Calendar, format!("カレンダー · {}", cal.data.as_str()))
-                        }
+                        Collection::Calendar(cal) => (
+                            IconName::Calendar,
+                            format!("カレンダー · {}", cal.data.as_str()),
+                        ),
                     };
                     content = content.child(
                         button(t, ("collection", index))

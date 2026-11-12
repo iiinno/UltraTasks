@@ -37,7 +37,6 @@ pub struct Tokens {
     pub secondary_line: f32,
     pub control_height: f32,
     pub row_height: f32,
-    pub long_row_height: f32,
     pub control_radius: f32,
 }
 
@@ -67,7 +66,6 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
         secondary_line: 18.,
         control_height: 32.,
         row_height: 44.,
-        long_row_height: 56.,
         control_radius: 6.,
     };
     if let Some(system) = contrast {
@@ -114,7 +112,7 @@ mod tests {
         (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
     }
 
-    fn geometry(tokens: Tokens) -> [f32; 8] {
+    fn geometry(tokens: Tokens) -> [f32; 7] {
         [
             tokens.body_size,
             tokens.body_line,
@@ -122,7 +120,6 @@ mod tests {
             tokens.secondary_line,
             tokens.control_height,
             tokens.row_height,
-            tokens.long_row_height,
             tokens.control_radius,
         ]
     }
@@ -241,7 +238,7 @@ mod tests {
                     assert_eq!([t.error_text, t.warning_text], [system.text; 2]);
                     assert!(ratio(t.text_primary, t.canvas) >= 4.5);
                     assert!(ratio(t.selection_text, t.selection_background) >= 4.5);
-                    assert_eq!(geometry(t), [14., 20., 12., 18., 32., 44., 56., 6.]);
+                    assert_eq!(geometry(t), [14., 20., 12., 18., 32., 44., 6.]);
                 }
             }
         }
@@ -252,6 +249,6 @@ mod tests {
         let light = resolve(ThemeMode::Light, false, None);
         let dark = resolve(ThemeMode::Dark, true, None);
         assert_eq!(geometry(light), geometry(dark));
-        assert_eq!(geometry(light), [14., 20., 12., 18., 32., 44., 56., 6.]);
+        assert_eq!(geometry(light), [14., 20., 12., 18., 32., 44., 6.]);
     }
 }
