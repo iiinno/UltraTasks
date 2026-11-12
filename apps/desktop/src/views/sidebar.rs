@@ -15,7 +15,10 @@ fn sidebar_item(
     let label = label.into();
     button(t, id)
         .w_full()
-        .px_2()
+        .h(px(t.nav_height))
+        .my(px(1.))
+        .px(px(7.))
+        .rounded(px(8.))
         .text_color(t.text_secondary)
         .selected(selected)
         .accessibility_label(label.clone())
@@ -39,7 +42,8 @@ fn sidebar_item(
                 .w_full()
                 .min_w_0()
                 .text_size(px(13.))
-                .gap_2()
+                .font_weight(FontWeight(510.))
+                .gap(px(8.))
                 .when(rail, |d| d.justify_center())
                 .child(Icon::new(icon).with_size(px(16.)))
                 .when(!rail, |d| {
@@ -56,38 +60,24 @@ impl Desktop {
             .v_flex()
             .flex_1()
             .min_h_0()
-            .gap_1()
             .overflow_y_scroll()
             .when(!rail, |d| {
                 d.child(
                     div()
-                        .h(px(28.))
+                        .h(px(t.nav_height))
                         .h_flex()
-                        .px_2()
+                        .px(px(7.))
                         .text_size(px(12.))
                         .text_color(t.text_secondary)
                         .child("リスト"),
                 )
-            })
-            .child(
-                sidebar_item(
-                    t,
-                    "all-lists",
-                    IconName::ListTodo,
-                    "すべてのリスト",
-                    rail,
-                    self.filters.list.is_none(),
-                )
-                .toggled(self.filters.list.is_none())
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.navigate(Navigation::List(None), window, cx)
-                })),
-            );
+            });
         for collection in &self.collections {
             let Collection::List(list) = collection else {
                 continue;
             };
             let id = list.key.id;
+            let selected = !self.calendar_view && self.filters.list == Some(id);
             lists = lists.child(
                 sidebar_item(
                     t,
@@ -95,9 +85,9 @@ impl Desktop {
                     IconName::List,
                     list.data.as_str().to_owned(),
                     rail,
-                    self.filters.list == Some(id),
+                    selected,
                 )
-                .toggled(self.filters.list == Some(id))
+                .toggled(selected)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.navigate(Navigation::List(Some(id)), window, cx)
                 })),
@@ -112,8 +102,8 @@ impl Desktop {
                     .child(
                         button(t, "sidebar-lists-before")
                             .icon(IconName::ChevronUp)
-                            .h(px(28.))
-                            .w(px(28.))
+                            .h(px(t.nav_height))
+                            .w(px(t.nav_height))
                             .tooltip("前のリスト")
                             .accessibility_label("前のリスト")
                             .disabled(self.collections_previous.is_none())
@@ -126,8 +116,8 @@ impl Desktop {
                     .child(
                         button(t, "sidebar-lists-after")
                             .icon(IconName::ChevronDown)
-                            .h(px(28.))
-                            .w(px(28.))
+                            .h(px(t.nav_height))
+                            .w(px(t.nav_height))
                             .tooltip("次のリスト")
                             .accessibility_label("次のリスト")
                             .disabled(self.collections_next.is_none())
@@ -142,83 +132,110 @@ impl Desktop {
         div()
             .id("sidebar")
             .role(Role::Navigation)
-            .aria_label("プランナーとリスト")
+            .aria_label("タスクと時間割")
             .v_flex()
-            .w(px(if rail { 52. } else { 192. }))
+            .w(px(if rail { 48. } else { t.sidebar_width }))
             .h_full()
             .min_h_0()
             .flex_shrink_0()
-            .border_r_1()
-            .border_color(t.border)
-            .bg(t.surface)
+            .bg(t.sidebar)
             .text_color(t.text_secondary)
             .child(
                 div()
                     .h_flex()
-                    .h(px(48.))
+                    .min_h(px(t.header_height))
                     .flex_shrink_0()
-                    .px_4()
-                    .text_color(t.text_primary)
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .when(rail, |d| d.px_0().justify_center())
-                    .child(if rail { "UT" } else { "UltraTasks" }),
+                    .px(px(12.))
+                    .gap(px(6.))
+                    .when(rail, |d| d.flex_col().px(px(8.)).py(px(8.)))
+                    .child(
+                        div()
+                            .h_flex()
+                            .h(px(t.nav_height))
+                            .flex_1()
+                            .min_w_0()
+                            .px(px(8.))
+                            .text_size(px(14.))
+                            .font_weight(FontWeight(590.))
+                            .text_color(t.text_primary)
+                            .when(rail, |d| d.flex_none().px_0().justify_center())
+                            .child(
+                                div()
+                                    .truncate()
+                                    .child(if rail { "UT" } else { "UltraTasks" }),
+                            ),
+                    )
+                    .child(
+                        button(t, "sidebar-search")
+                            .icon(IconName::Search)
+                            .w(px(t.nav_height))
+                            .h(px(t.nav_height))
+                            .flex_shrink_0()
+                            .rounded(px(9999.))
+                            .text_color(t.text_secondary)
+                            .tooltip("タスクを検索 Ctrl+K")
+                            .accessibility_label("タスクを検索")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.navigate(Navigation::SearchInput, window, cx)
+                            })),
+                    )
+                    .child(
+                        button(t, "sidebar-new-task")
+                            .icon(IconName::SquarePen)
+                            .w(px(t.nav_height))
+                            .h(px(t.nav_height))
+                            .flex_shrink_0()
+                            .rounded(px(9999.))
+                            .border_1()
+                            .border_color(t.border)
+                            .bg(t.surface_hover)
+                            .text_color(t.text_primary)
+                            .tooltip("タスクを追加 Ctrl+N")
+                            .accessibility_label("タスクを追加")
+                            .disabled(self.info.is_none() || self.recovery)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.navigate(Navigation::QuickInput, window, cx)
+                            })),
+                    ),
             )
             .child(
                 div()
                     .v_flex()
                     .flex_1()
                     .min_h_0()
-                    .px_2()
-                    .gap_1()
+                    .px(px(12.))
+                    .when(rail, |d| d.px(px(8.)))
                     .child(
-                        div()
-                            .h_flex()
-                            .gap_1()
-                            .mb_2()
-                            .when(rail, |d| d.flex_col())
-                            .child(
-                                button(t, "sidebar-search")
-                                    .icon(IconName::Search)
-                                    .tooltip("タスクを検索 Ctrl+K")
-                                    .accessibility_label("タスクを検索")
-                                    .when(rail, |button| button.w_full())
-                                    .when(!rail, |button| button.flex_1().label("検索"))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.navigate(Navigation::SearchInput, window, cx)
-                                    })),
-                            )
-                            .child(
-                                button(t, "sidebar-new-task")
-                                    .icon(IconName::SquarePen)
-                                    .w(px(32.))
-                                    .when(rail, |button| button.w_full())
-                                    .tooltip("タスクを追加 Ctrl+N")
-                                    .accessibility_label("タスクを追加")
-                                    .disabled(self.info.is_none() || self.recovery)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.navigate(Navigation::QuickInput, window, cx)
-                                    })),
-                            ),
+                        sidebar_item(
+                            t,
+                            "sidebar-tasks",
+                            IconName::ListTodo,
+                            "タスク",
+                            rail,
+                            !self.calendar_view && self.filters.list.is_none(),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.navigate(Navigation::List(None), window, cx)
+                        })),
                     )
                     .child(
                         sidebar_item(
                             t,
-                            "sidebar-planner",
+                            "sidebar-calendar",
                             IconName::CalendarDays,
-                            "プランナー",
+                            "時間割",
                             rail,
-                            false,
+                            self.calendar_view,
                         )
                         .on_click(cx.listener(|this, _, window, cx| {
-                            this.navigate(Navigation::Tasks, window, cx)
+                            this.navigate(Navigation::Calendar, window, cx)
                         })),
                     )
-                    .child(div().h(px(12.)).flex_shrink_0())
+                    .child(div().h(px(16.)).flex_shrink_0())
                     .child(lists)
                     .child(
                         div()
                             .v_flex()
-                            .gap_1()
                             .py_2()
                             .flex_shrink_0()
                             .child(
@@ -231,11 +248,9 @@ impl Desktop {
                                     matches!(self.popup, Some(Popup::Collections)),
                                 )
                                 .disabled(self.info.is_none())
-                                .on_click(cx.listener(
-                                    |this, _, window, cx| {
-                                        this.open_popup(Popup::Collections, window, cx)
-                                    },
-                                )),
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_popup(Popup::Collections, window, cx)
+                                })),
                             )
                             .child(
                                 sidebar_item(
@@ -246,15 +261,13 @@ impl Desktop {
                                     rail,
                                     matches!(self.popup, Some(Popup::Settings(_))),
                                 )
-                                .on_click(cx.listener(
-                                    |this, _, window, cx| {
-                                        this.open_popup(
-                                            Popup::Settings(this.settings.clone()),
-                                            window,
-                                            cx,
-                                        )
-                                    },
-                                )),
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_popup(
+                                        Popup::Settings(this.settings.clone()),
+                                        window,
+                                        cx,
+                                    )
+                                })),
                             ),
                     ),
             )

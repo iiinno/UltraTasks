@@ -12,16 +12,16 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = self.tokens;
+        let status = match self.filters.status {
+            StatusFilter::Open => "未完了",
+            StatusFilter::Done => "完了",
+            StatusFilter::Any => "すべて",
+        };
         let count = if self.task_loading {
             "読み込み中…".into()
         } else if self.tasks.loaded {
             format!(
-                "{} {}件{}",
-                match self.filters.status {
-                    StatusFilter::Open => "未完了",
-                    StatusFilter::Done => "完了",
-                    StatusFilter::Any => "すべて",
-                },
+                "{}件{}",
                 self.tasks.total,
                 if self.tasks.held_done.is_empty() {
                     String::new()
@@ -43,18 +43,6 @@ impl Desktop {
             + usize::from(self.filters.status != StatusFilter::Open)
             + usize::from(self.filters.due != 0)
             + usize::from(self.filters.blocks != BlockFilter::Any);
-        let collection = self
-            .filters
-            .list
-            .or_else(|| self.info.as_ref().map(|info| info.default_list))
-            .and_then(|id| {
-                self.collections.iter().find_map(|c| match c {
-                    Collection::List(list) if list.key.id == id => {
-                        Some(list.data.as_str().to_owned())
-                    }
-                    _ => None,
-                })
-            });
         let (empty_title, empty_hint) = if self.task_loading || !self.tasks.loaded {
             if self.read_error && !self.task_loading {
                 (
@@ -72,48 +60,9 @@ impl Desktop {
         } else {
             (
                 "未完了のタスクはありません",
-                "次に取り組むことを、上の入力欄から追加できます。",
+                "新規ボタンまたはCtrl+Nでタスクを追加できます。",
             )
         };
-        let search_input = Styled::h(Input::new(&self.search).small(), px(28.))
-            .text_size(px(13.))
-            .aria_label("タスク名を検索")
-            .prefix(
-                Icon::new(IconName::Search)
-                    .with_size(px(14.))
-                    .text_color(t.text_secondary),
-            )
-            .cleanable(true)
-            .bg(t.surface)
-            .bordered(false)
-            .focus_bordered(false);
-        let quick_input = Styled::h(Input::new(&self.quick).small(), px(32.))
-            .text_size(px(14.))
-            .bg(t.surface)
-            .border_color(t.border)
-            .focus_bordered(false)
-            .aria_label("追加するタスク名")
-            .on_paste({
-                let weak = cx.weak_entity();
-                move |item, window, cx| {
-                    let invalid = item.text().is_some_and(|text| text.contains(['\r', '\n']));
-                    if invalid {
-                        let _ = weak.update(cx, |this, cx| {
-                            let message =
-                                "タイトルは1行で入力してください。貼付前の入力を保持しています"
-                                    .to_owned();
-                            this.quick_validation = Some(message.clone());
-                            this.fail(message, cx);
-                        });
-                    } else {
-                        let weak = weak.clone();
-                        window.on_next_frame(move |_, cx| {
-                            let _ = weak.update(cx, |this, _| this.quick_ready = true);
-                        });
-                    }
-                    invalid
-                }
-            });
         div()
             .v_flex()
             .size_full()
@@ -121,19 +70,60 @@ impl Desktop {
             .child(
                 div()
                     .h_flex()
-                    .h(px(40.))
+                    .h(px(44.))
                     .px(px(12.))
                     .flex_shrink_0()
                     .gap(px(8.))
-                    .justify_between()
                     .border_b_1()
                     .border_color(t.border)
+                    .child(self.filter_trigger(cx))
+                    .when(self.search_open, |d| {
+                        let search_input = Styled::h(Input::new(&self.search).small(), px(28.))
+                            .text_size(px(13.))
+                            .aria_label("タスク名を検索")
+                            .prefix(
+                                Icon::new(IconName::Search)
+                                    .with_size(px(14.))
+                                    .text_color(t.text_secondary),
+                            )
+                            .cleanable(true)
+                            .bg(t.canvas)
+                            .bordered(false)
+                            .focus_bordered(false);
+                        d.child(
+                            input_frame(self.search.entity_id(), &self.search.focus_handle(cx), t)
+                                .flex_1()
+                                .min_w_0()
+                                .child(search_input),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .h_flex()
+                    .h(px(36.))
+                    .flex_shrink_0()
+                    .mx(px(8.))
+                    .mt(px(8.))
+                    .px(px(8.))
+                    .gap(px(8.))
+                    .rounded(px(8.))
+                    .bg(t.surface)
+                    .child(
+                        Icon::new(match self.filters.status {
+                            StatusFilter::Open => IconName::Circle,
+                            StatusFilter::Done => IconName::CircleCheck,
+                            StatusFilter::Any => IconName::ListTodo,
+                        })
+                        .with_size(px(14.))
+                        .text_color(t.text_secondary),
+                    )
                     .child(
                         div()
                             .flex_shrink_0()
-                            .text_size(px(16.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child("タスク"),
+                            .text_size(px(13.))
+                            .font_weight(FontWeight(510.))
+                            .child(status),
                     )
                     .child(
                         div()
@@ -146,135 +136,17 @@ impl Desktop {
             )
             .child(
                 div()
-                    .v_flex()
-                    .flex_shrink_0()
-                    .gap(px(8.))
-                    .px(px(12.))
-                    .pt(px(8.))
-                    .pb(px(4.))
-                    .child(
-                        div()
-                            .h_flex()
-                            .gap(px(6.))
-                            .child(
-                                input_frame(self.search.entity_id(), &self.search.focus_handle(cx), t)
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(search_input),
-                            )
-                            .child(
-                                button(t, "filters")
-                                    .ghost()
-                                    .compact()
-                                    .h(px(28.))
-                                    .icon(IconName::ListFilter)
-                                    .label(if filter_count == 0 {
-                                        "絞り込み".into()
-                                    } else {
-                                        format!("絞り込み {filter_count}")
-                                    })
-                                    .when(filter_count > 0, |b| {
-                                        b.bg(t.selection_background).text_color(t.selection_text)
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.open_popup(
-                                            Popup::Filters(this.filters.clone()),
-                                            window,
-                                            cx,
-                                        )
-                                    })),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .v_flex()
-                            .gap(px(2.))
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .gap(px(6.))
-                                    .child(
-                                        input_frame(
-                                            self.quick.entity_id(),
-                                            &self.quick.focus_handle(cx),
-                                            t,
-                                        )
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(quick_input),
-                                    )
-                                    .child(
-                                        button(t, "add-task")
-                                            .ghost()
-                                            .compact()
-                                            .w(px(32.))
-                                            .h(px(32.))
-                                            .icon(IconName::Plus)
-                                            .accessibility_label("タスクを追加")
-                                            .tooltip("タスクを追加 · Enter")
-                                            .disabled(
-                                                self.busy || self.info.is_none() || self.recovery,
-                                            )
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.add_task(window, cx)
-                                            })),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .h(px(24.))
-                                    .gap(px(4.))
-                                    .child(
-                                        div()
-                                            .flex_shrink_0()
-                                            .text_size(px(12.))
-                                            .text_color(t.text_secondary)
-                                            .child("追加先"),
-                                    )
-                                    .child(
-                                        button(t, "collections")
-                                            .ghost()
-                                            .compact()
-                                            .h(px(24.))
-                                            .min_w_0()
-                                            .max_w(px(220.))
-                                            .icon(IconName::List)
-                                            .label(
-                                                collection
-                                                    .clone()
-                                                    .unwrap_or_else(|| "リストを管理".into()),
-                                            )
-                                            .accessibility_label("追加先を確認・リストとカレンダーを管理")
-                                            .tooltip(
-                                                collection
-                                                    .map(|name| {
-                                                        format!("追加先: {name} · リスト・カレンダーを管理")
-                                                    })
-                                                    .unwrap_or_else(|| "リスト・カレンダーを管理".into()),
-                                            )
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.open_popup(Popup::Collections, window, cx)
-                                            })),
-                                    ),
-                            ),
-                    )
-                    .when_some(self.quick_validation.clone(), |d, message| {
-                        d.child(super::validation_message("quick-error", message, t))
-                    }),
-            )
-            .child(
-                div()
                     .id("task-list")
                     .key_context("TaskList")
                     .track_focus(&self.list_focus)
                     .focusable()
-                    .focus(move |s| s.shadow(focus_outline(t)))
+                    .focus_visible(move |s| s.shadow(focus_outline(t)))
                     .role(Role::List)
+                    .aria_label("タスク一覧")
                     .flex_1()
                     .min_h_0()
                     .v_flex()
-                    .px(px(4.))
+                    .px(px(8.))
                     .on_action(cx.listener(|this, _: &SelectNext, window, cx| {
                         this.select_relative(1, window, cx)
                     }))
@@ -372,6 +244,134 @@ impl Desktop {
             })
             .into_any_element()
     }
+
+    pub(crate) fn quick_task_content(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let t = self.tokens;
+        let collection = self
+            .filters
+            .list
+            .or_else(|| self.info.as_ref().map(|info| info.default_list))
+            .and_then(|id| {
+                self.collections.iter().find_map(|c| match c {
+                    Collection::List(list) if list.key.id == id => {
+                        Some(list.data.as_str().to_owned())
+                    }
+                    _ => None,
+                })
+            });
+        let quick_input = Styled::h(Input::new(&self.quick), px(40.))
+            .text_size(px(20.))
+            .font_weight(FontWeight(590.))
+            .bg(t.surface)
+            .bordered(false)
+            .focus_bordered(false)
+            .aria_label("追加するタスク名")
+            .on_paste({
+                let weak = cx.weak_entity();
+                move |item, window, cx| {
+                    let invalid = item.text().is_some_and(|text| text.contains(['\r', '\n']));
+                    if invalid {
+                        let _ = weak.update(cx, |this, cx| {
+                            let message =
+                                "タイトルは1行で入力してください。貼付前の入力を保持しています"
+                                    .to_owned();
+                            this.quick_validation = Some(message.clone());
+                            this.fail(message, cx);
+                        });
+                    } else {
+                        let weak = weak.clone();
+                        window.on_next_frame(move |_, cx| {
+                            let _ = weak.update(cx, |this, _| this.quick_ready = true);
+                        });
+                    }
+                    invalid
+                }
+            });
+        div()
+            .v_flex()
+            .w_full()
+            .min_w_0()
+            .px(px(6.))
+            .child(
+                input_frame(self.quick.entity_id(), &self.quick.focus_handle(cx), t)
+                    .w_full()
+                    .min_w_0()
+                    .py(px(12.))
+                    .pl(px(6.))
+                    .pr(px(48.))
+                    .child(quick_input),
+            )
+            .when_some(self.quick_validation.clone(), |d, message| {
+                d.child(super::validation_message("quick-error", message, t))
+            })
+            .child(
+                div()
+                    .h_flex()
+                    .gap(px(6.))
+                    .pt(px(6.))
+                    .px(px(12.))
+                    .pb(px(12.))
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_size(px(12.))
+                            .text_color(t.text_secondary)
+                            .child("追加先"),
+                    )
+                    .child(
+                        button(t, "collections")
+                            .ghost()
+                            .compact()
+                            .h(px(28.))
+                            .min_w_0()
+                            .max_w(px(320.))
+                            .icon(IconName::List)
+                            .label(
+                                collection
+                                    .clone()
+                                    .unwrap_or_else(|| "リストを管理".into()),
+                            )
+                            .accessibility_label("追加先を確認・リストとカレンダーを管理")
+                            .tooltip(
+                                collection
+                                    .map(|name| {
+                                        format!("追加先: {name} · リスト・カレンダーを管理")
+                                    })
+                                    .unwrap_or_else(|| "リスト・カレンダーを管理".into()),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_popup(Popup::Collections, window, cx)
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .h_flex()
+                    .justify_end()
+                    .p(px(12.))
+                    .border_t_1()
+                    .border_color(t.border)
+                    .child(
+                        button(t, "add-task")
+                            .primary()
+                            .h(px(32.))
+                            .px(px(12.))
+                            .label("タスクを作成")
+                            .accessibility_label("タスクを作成")
+                            .tooltip("タスクを作成 · Enter")
+                            .disabled(self.busy || self.info.is_none() || self.recovery)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.add_task(window, cx)
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn task_row(
         &mut self,
         index: usize,
@@ -397,13 +397,13 @@ impl Desktop {
         let row_id = SharedString::from(format!("task-{id}"));
         div()
             .id(row_id)
-            .min_h(px(t.row_height))
+            .h(px(t.row_height))
             .w_full()
+            .min_w_0()
             .h_flex()
-            .gap(px(4.))
-            .px(px(6.))
-            .py(px(1.))
-            .rounded(px(4.))
+            .gap(px(8.))
+            .px(px(8.))
+            .rounded(px(8.))
             .border_1()
             .border_color(transparent_black())
             .bg(if selected {
@@ -455,6 +455,7 @@ impl Desktop {
                     })
                     .w(px(28.))
                     .h(px(28.))
+                    .flex_shrink_0()
                     .when(selected, |b| b.text_color(t.selection_text))
                     .disabled(self.busy || self.recovery)
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -467,7 +468,9 @@ impl Desktop {
                     .id(SharedString::from(format!("title-{id}")))
                     .flex_1()
                     .min_w_0()
-                    .v_flex()
+                    .h_full()
+                    .h_flex()
+                    .gap(px(12.))
                     .cursor_pointer()
                     .role(Role::ListItem)
                     .aria_label(format!(
@@ -478,15 +481,20 @@ impl Desktop {
                     ))
                     .child(
                         div()
-                            .text_size(px(14.))
-                            .line_height(px(18.))
-                            .line_clamp(2)
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight(510.))
+                            .line_height(px(20.))
+                            .truncate()
                             .child(title),
                     )
                     .child(
                         div()
+                            .min_w_0()
+                            .max_w(px(if self.calendar_view { 72. } else { 320. }))
                             .text_size(px(12.))
-                            .line_height(px(16.))
+                            .line_height(px(18.))
                             .text_color(if selected {
                                 t.selection_text
                             } else {
@@ -526,6 +534,7 @@ impl Desktop {
                     .compact()
                     .w(px(28.))
                     .h(px(28.))
+                    .flex_shrink_0()
                     .icon(IconName::Clock)
                     .when(selected, |b| b.text_color(t.selection_text))
                     .accessibility_label("作業時間を指定・編集")
