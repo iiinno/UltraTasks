@@ -906,10 +906,7 @@ fn pc6_clock_reversal_expiry_preserves_the_redo_prefix_before_the_missing_step()
     let mut store = db.open_as(actor, "2026-01-02T00:00:00Z");
     let original = create_task(&mut store, "A");
     let mut current = original.clone();
-    for (at, title) in [
-        ("2026-01-01T00:00:00Z", "B"),
-        ("2026-01-02T00:00:00Z", "C"),
-    ] {
+    for (at, title) in [("2026-01-01T00:00:00Z", "B"), ("2026-01-02T00:00:00Z", "C")] {
         set_now(&mut store, instant(at));
         let mut data = current.data.clone();
         data.title = Title::new(title).unwrap();
@@ -988,7 +985,10 @@ fn pc6_count_and_byte_pruning_discard_redo_only_after_an_undone_step_is_removed(
                 },
             )
             .unwrap();
-            assert_eq!(store.task_rows(query(), &[]).unwrap().generation, generation);
+            assert_eq!(
+                store.task_rows(query(), &[]).unwrap().generation,
+                generation
+            );
             let history = store.history().unwrap();
             assert!(history.undo.is_none());
             let counts = inspect(&mut store).unwrap();
