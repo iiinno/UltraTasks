@@ -735,6 +735,295 @@ fn pc6_thirty_day_boundary_is_exclusive_and_undo_redo_does_not_extend_it() {
 }
 
 #[test]
+fn pc6_expiring_an_undone_creation_discards_its_dependent_redo_branch() {
+    let db = Database::new();
+    let actor = ActorId::new().unwrap();
+    let mut store = db.open_as(actor, "2026-01-01T00:00:00Z");
+    let original = create_task(&mut store, "A");
+    set_now(&mut store, instant("2026-01-02T00:00:00Z"));
+    let mut data = original.data.clone();
+    data.title = Title::new("B").unwrap();
+    let edited = store
+        .save_task(Save::Update {
+            expected: original.key,
+            data,
+        })
+        .unwrap();
+    let undone_edit = store.undo(edited.history.undo.unwrap().target).unwrap();
+    let undone_creation = store
+        .undo(undone_edit.history.undo.unwrap().target)
+        .unwrap();
+    assert_eq!(inspect(&mut store).unwrap().retained_operations, 2);
+
+    set_now(&mut store, instant("2026-01-31T00:00:00Z"));
+    assert_eq!(
+        store.history().unwrap(),
+        HistoryState {
+            undo: None,
+            redo: None
+        }
+    );
+    let counts = inspect(&mut store).unwrap();
+    assert_eq!(
+        (counts.retained_operations, counts.retained_image_bytes),
+        (0, 0)
+    );
+    assert!(matches!(
+        store.get(EntityId::Task(original.key.id)),
+        Err(Error::NotFound(_))
+    ));
+    assert_eq!(
+        store.task_rows(query(), &[]).unwrap().generation,
+        undone_creation.generation
+    );
+    let revision = match store.save_task(Save::Update {
+        expected: original.key,
+        data: original.data,
+    }) {
+        Err(Error::Conflict {
+            current: CurrentVersion::Deleted(revision),
+            ..
+        }) => revision,
+        other => panic!("削除済みの物理revisionが失われた: {other:?}"),
+    };
+    assert_eq!(
+        undone_creation.changed,
+        vec![Change::Deleted {
+            id: EntityId::Task(original.key.id),
+            revision,
+        }]
+    );
+    let before = snapshot(&mut store, &[EntityId::Task(original.key.id)]);
+    for target in [
+        undone_creation.history.redo.unwrap().target,
+        undone_edit.history.redo.unwrap().target,
+    ] {
+        assert!(matches!(
+            store.redo(target),
+            Err(Error::History(HistoryProblem::Expired))
+        ));
+    }
+    assert_eq!(
+        snapshot(&mut store, &[EntityId::Task(original.key.id)]),
+        before
+    );
+}
+
+#[test]
+fn pc6_expiring_an_applied_creation_preserves_the_edit_redo() {
+    let db = Database::new();
+    let actor = ActorId::new().unwrap();
+    let mut store = db.open_as(actor, "2026-01-01T00:00:00Z");
+    let original = create_task(&mut store, "A");
+    set_now(&mut store, instant("2026-01-02T00:00:00Z"));
+    let mut data = original.data.clone();
+    data.title = Title::new("B").unwrap();
+    let edited = store
+        .save_task(Save::Update {
+            expected: original.key,
+            data: data.clone(),
+        })
+        .unwrap();
+    let undone = store.undo(edited.history.undo.unwrap().target).unwrap();
+    let restored = task(&mut store, original.key.id);
+
+    set_now(&mut store, instant("2026-01-31T00:00:00Z"));
+    let history = store.history().unwrap();
+    assert!(history.undo.is_none());
+    let redo = history.redo.unwrap();
+    assert_eq!(redo.kind, OperationKind::TaskEdited);
+    assert_eq!(inspect(&mut store).unwrap().retained_operations, 1);
+    assert_eq!(task(&mut store, original.key.id), restored);
+    assert_eq!(
+        store.task_rows(query(), &[]).unwrap().generation,
+        undone.generation
+    );
+    assert!(matches!(
+        store.redo(undone.history.redo.unwrap().target),
+        Err(Error::History(HistoryProblem::StaleTarget))
+    ));
+    store.redo(redo.target).unwrap();
+    let redone = task(&mut store, original.key.id);
+    assert_eq!(redone.data, data);
+    assert!(redone.key.revision > restored.key.revision);
+    assert!(store.history().unwrap().redo.is_none());
+}
+
+#[test]
+fn pc6_expiring_redo_preserves_other_actors_history_and_current_data() {
+    let db = Database::new();
+    let actor_a = ActorId::new().unwrap();
+    let actor_b = ActorId::new().unwrap();
+    let mut a = db.open_as(actor_a, "2026-01-01T00:00:00Z");
+    let original = create_task(&mut a, "A");
+    set_now(&mut a, instant("2026-01-02T00:00:00Z"));
+    let mut data = original.data.clone();
+    data.title = Title::new("B").unwrap();
+    let edited = a
+        .save_task(Save::Update {
+            expected: original.key,
+            data,
+        })
+        .unwrap();
+    let undone = a.undo(edited.history.undo.unwrap().target).unwrap();
+    a.undo(undone.history.undo.unwrap().target).unwrap();
+    drop(a);
+    let mut b = db.open_as(actor_b, "2026-01-02T00:00:00Z");
+    let live = create_task(&mut b, "別actorの現在データ");
+    let other = create_task(&mut b, "別actorのRedo");
+    let target = b.history().unwrap().undo.unwrap().target;
+    let undone = b.undo(target).unwrap();
+    drop(b);
+
+    let mut a = db.open_as(actor_a, "2026-01-02T00:00:00Z");
+    set_now(&mut a, instant("2026-01-31T00:00:00Z"));
+    assert!(a.history().unwrap().redo.is_none());
+    assert_eq!(inspect(&mut a).unwrap().retained_operations, 2);
+    assert_eq!(task(&mut a, live.key.id), live);
+    assert_eq!(
+        a.task_rows(query(), &[]).unwrap().generation,
+        undone.generation
+    );
+    drop(a);
+    let mut b = db.open_as(actor_b, "2026-01-31T00:00:00Z");
+    let history = b.history().unwrap();
+    assert_eq!(history.undo.unwrap().focus, EntityId::Task(live.key.id));
+    let redo = history.redo.unwrap();
+    assert_eq!(redo.focus, EntityId::Task(other.key.id));
+    assert!(matches!(
+        b.redo(undone.history.redo.unwrap().target),
+        Err(Error::History(HistoryProblem::StaleTarget))
+    ));
+    b.redo(redo.target).unwrap();
+    assert_eq!(task(&mut b, other.key.id).data, other.data);
+    assert_eq!(task(&mut b, live.key.id), live);
+}
+
+#[test]
+fn pc6_clock_reversal_expiry_preserves_the_redo_prefix_before_the_missing_step() {
+    let db = Database::new();
+    let actor = ActorId::new().unwrap();
+    let mut store = db.open_as(actor, "2026-01-02T00:00:00Z");
+    let original = create_task(&mut store, "A");
+    let mut current = original.clone();
+    for (at, title) in [
+        ("2026-01-01T00:00:00Z", "B"),
+        ("2026-01-02T00:00:00Z", "C"),
+    ] {
+        set_now(&mut store, instant(at));
+        let mut data = current.data.clone();
+        data.title = Title::new(title).unwrap();
+        current = store
+            .save_task(Save::Update {
+                expected: current.key,
+                data,
+            })
+            .unwrap()
+            .value;
+    }
+    let target = store.history().unwrap().undo.unwrap().target;
+    let undone_last = store.undo(target).unwrap();
+    let undone_middle = store
+        .undo(undone_last.history.undo.unwrap().target)
+        .unwrap();
+    store
+        .undo(undone_middle.history.undo.unwrap().target)
+        .unwrap();
+
+    set_now(&mut store, instant("2026-01-31T00:00:00Z"));
+    let history = store.history().unwrap();
+    assert!(history.undo.is_none());
+    let redo = history.redo.unwrap();
+    assert_eq!(redo.kind, OperationKind::TaskCreated);
+    assert_eq!(inspect(&mut store).unwrap().retained_operations, 1);
+    for target in [
+        undone_middle.history.redo.unwrap().target,
+        undone_last.history.redo.unwrap().target,
+    ] {
+        assert!(matches!(
+            store.redo(target),
+            Err(Error::History(HistoryProblem::Expired))
+        ));
+    }
+    store.redo(redo.target).unwrap();
+    assert_eq!(task(&mut store, original.key.id).data, original.data);
+    assert!(store.history().unwrap().redo.is_none());
+}
+
+#[test]
+fn pc6_count_and_byte_pruning_discard_redo_only_after_an_undone_step_is_removed() {
+    for by_bytes in [false, true] {
+        for undo_creation in [false, true] {
+            let db = Database::new();
+            let actor = ActorId::new().unwrap();
+            let mut store = db.open_as(actor, "2026-01-01T00:00:00Z");
+            let original = create_task(&mut store, "A");
+            let creation_bytes = inspect(&mut store).unwrap().retained_image_bytes;
+            let mut data = original.data.clone();
+            data.title = Title::new("B").unwrap();
+            let edited = store
+                .save_task(Save::Update {
+                    expected: original.key,
+                    data: data.clone(),
+                })
+                .unwrap();
+            let edit_bytes = inspect(&mut store).unwrap().retained_image_bytes - creation_bytes;
+            let undone = store.undo(edited.history.undo.unwrap().target).unwrap();
+            let restored = task(&mut store, original.key.id);
+            if undo_creation {
+                store.undo(undone.history.undo.unwrap().target).unwrap();
+            }
+            let generation = store.task_rows(query(), &[]).unwrap().generation;
+
+            set_history_limits(
+                &mut store,
+                HistoryLimits {
+                    operations: if by_bytes { MAX_HISTORY_OPERATIONS } else { 1 },
+                    history_bytes: if by_bytes {
+                        edit_bytes
+                    } else {
+                        MAX_HISTORY_BYTES
+                    },
+                    operation_bytes: MAX_OPERATION_BYTES,
+                },
+            )
+            .unwrap();
+            assert_eq!(store.task_rows(query(), &[]).unwrap().generation, generation);
+            let history = store.history().unwrap();
+            assert!(history.undo.is_none());
+            let counts = inspect(&mut store).unwrap();
+            if undo_creation {
+                assert_eq!(
+                    (counts.retained_operations, counts.retained_image_bytes),
+                    (0, 0)
+                );
+                assert!(history.redo.is_none());
+                assert!(matches!(
+                    store.get(EntityId::Task(original.key.id)),
+                    Err(Error::NotFound(_))
+                ));
+                assert!(matches!(
+                    store.redo(undone.history.redo.unwrap().target),
+                    Err(Error::History(HistoryProblem::Expired))
+                ));
+            } else {
+                assert_eq!(
+                    (counts.retained_operations, counts.retained_image_bytes),
+                    (1, edit_bytes)
+                );
+                assert_eq!(task(&mut store, original.key.id), restored);
+                let redo = history.redo.unwrap();
+                assert_eq!(redo.kind, OperationKind::TaskEdited);
+                store.redo(redo.target).unwrap();
+                let redone = task(&mut store, original.key.id);
+                assert_eq!(redone.data, data);
+                assert!(redone.key.revision > restored.key.revision);
+            }
+        }
+    }
+}
+
+#[test]
 fn pc6_startup_expires_history_but_preserves_current_content_and_versions() {
     let db = Database::new();
     let actor = ActorId::new().unwrap();
