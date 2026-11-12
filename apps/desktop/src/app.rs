@@ -285,9 +285,9 @@ impl ReadContext {
             Self::ListDetail(request, id, _) => {
                 *request == epoch && tasks.visible_selection(selected) == Some(*id)
             }
-            Self::Detail(request, _)
-            | Self::ExistingBlock(request, _)
-            | Self::Entity(request) => *request == epoch,
+            Self::Detail(request, _) | Self::ExistingBlock(request, _) | Self::Entity(request) => {
+                *request == epoch
+            }
             _ => true,
         }
     }
@@ -2684,7 +2684,9 @@ mod task_selection_tests {
             assert_eq!(cache.visible_selection(selected), None);
             assert!(!old_detail.selection_is_current(8, selected, &cache));
             cache.refresh(
-                store.task_rows(query.clone(), &[a.key.id, b.key.id]).unwrap(),
+                store
+                    .task_rows(query.clone(), &[a.key.id, b.key.id])
+                    .unwrap(),
                 &list,
             );
             assert_eq!(cache.rows, initial.items);
@@ -2695,7 +2697,11 @@ mod task_selection_tests {
                 &list,
             );
             assert_eq!(
-                cache.rows.iter().map(|row| row.task.key.id).collect::<Vec<_>>(),
+                cache
+                    .rows
+                    .iter()
+                    .map(|row| row.task.key.id)
+                    .collect::<Vec<_>>(),
                 expected
             );
             assert_eq!(cache.visible_selection(selected), None);
@@ -2734,7 +2740,13 @@ mod task_selection_tests {
             TaskPosition::After(first.next.clone().unwrap()),
         );
         for (initial, added, mode, selected, index) in [
-            (first.clone(), second.clone(), PageMode::Next, tasks[1].key.id, 1),
+            (
+                first.clone(),
+                second.clone(),
+                PageMode::Next,
+                tasks[1].key.id,
+                1,
+            ),
             (second, first, PageMode::Previous, tasks[2].key.id, 0),
         ] {
             let list = ListState::new(0, ListAlignment::Top, px(168.));
@@ -2753,8 +2765,11 @@ mod task_selection_tests {
                 }
                 assert_eq!(cache.visible_selection(Some(selected)), Some(selected));
                 assert!(
-                    ReadContext::ListDetail(3, selected, false)
-                        .selection_is_current(3, Some(selected), &cache)
+                    ReadContext::ListDetail(3, selected, false).selection_is_current(
+                        3,
+                        Some(selected),
+                        &cache
+                    )
                 );
                 let (anchor, offset) = cache.anchor(&list).unwrap();
                 assert_eq!(anchor, selected);
@@ -2797,10 +2812,16 @@ mod task_selection_tests {
                 .unwrap()
                 .value;
             let rows = store.task_rows(query.clone(), &[a.key.id]).unwrap();
-            assert_eq!(rows.matching_ids.contains(&a.key.id), status == TaskStatus::Open);
+            assert_eq!(
+                rows.matching_ids.contains(&a.key.id),
+                status == TaskStatus::Open
+            );
             cache.refresh(rows, &list);
             assert_eq!(cache.visible_selection(selected), selected);
-            assert_eq!(cache.held_done.contains(&a.key.id), status == TaskStatus::Done);
+            assert_eq!(
+                cache.held_done.contains(&a.key.id),
+                status == TaskStatus::Done
+            );
         }
         store
             .save_task(Save::Update {
@@ -2813,7 +2834,9 @@ mod task_selection_tests {
             .unwrap();
         cache.refresh(store.task_rows(query, &[a.key.id]).unwrap(), &list);
         assert_eq!(cache.visible_selection(selected), None);
-        assert!(!ReadContext::ListDetail(4, a.key.id, false).selection_is_current(4, selected, &cache));
+        assert!(
+            !ReadContext::ListDetail(4, a.key.id, false).selection_is_current(4, selected, &cache)
+        );
         assert!(ReadContext::Detail(4, false).selection_is_current(4, None, &cache));
     }
 }
