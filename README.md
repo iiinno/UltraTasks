@@ -8,9 +8,11 @@ UIUXを重視し、Linearの情報密度と整った見た目、Google系アプ�
 
 ## 現在地
 
+動くWindows基準版を固め、その上に小さい改善PRを並行して作る。[基準版の範囲とPR運用](docs/windows-baseline.md)に合格条件とbase/headの扱いを記載した。各変更の合否は、そのSHAのCIと実画面確認で判断する。
+
 Task・Event・TimeBlock・リスト・カレンダーの編集、Undo/Redo、検索と絞り込み、日付移動、時刻指定と最小ドラッグを実装し、正式テーマとcoreを接続した。タスク一覧は可視行を描画し、保存は専用DBスレッドで処理する。テーマはsystem/light/dark、motionはsystem/reduced/noneを選べる。
 
-Windows release版は[CI run 43127481310](https://github.com/iiinno/UltraTasks/actions/runs/43127481310)でビルド・検証・配布・core本測定を完了した。Rustテストは102成功・0失敗。Linearの製品画面とRadix/Geistの部品規約を参考に、サイドバー、コンパクトな操作帯、可変高の一覧、時間軸を残す編集面へ組み直した。配布exeで日本語Task追加、時刻入力、検索、未保存のリスト移動、完了、Undo/Redo、再起動復元、1280/900幅とdark/lightを確認した。[デザイン規約](DESIGN.md)と[参照元](docs/ui-reference-study.md)に実装値と再利用範囲を記録している。
+UI改修版 `05c8fc2` は[CI run 43127481310](https://github.com/iiinno/UltraTasks/actions/runs/43127481310)でビルド・検証・配布・core本測定を完了した。その版のRustテストは102成功・0失敗。Linearの製品画面とRadix/Geistの部品規約を参考に、サイドバー、コンパクトな操作帯、可変高の一覧、時間軸を残す編集面へ組み直した。配布exeで日本語Task追加、時刻入力、検索、未保存のリスト移動、完了、Undo/Redo、再起動復元、1280/900幅とdark/lightを確認した。[デザイン規約](DESIGN.md)と[参照元](docs/ui-reference-study.md)に実装値と再利用範囲を記録している。
 
 IME変換中、Narrator、各DPI、大規模データの実GUI性能は残る確認。[PCプロトタイプの状態](docs/prototype-status.md)に配布source、旧版のcore基準測定、未確認範囲を記載している。
 
@@ -18,7 +20,7 @@ IME変換中、Narrator、各DPI、大規模データの実GUI性能は残る確
 
 Windows x64用のビルド済み成果物を使う。通常利用にRust、Build Tools、Pythonは不要。
 
-1. 上記の成功CIから `windows-release-05c8fc2f4c3ce9a5cbbb7ce7accff03a791f4777-1` を取得する。API由来とhashを検証する取得スクリプトは[開発手順](docs/development.md#成果物を取得する)を参照。
+1. [Windows CI](https://github.com/iiinno/UltraTasks/actions/workflows/windows.yml)から、対象のsourceで完了・成功したtrusted pushのrunを選ぶ。`windows-release-<head_sha>-<attempt>`を取得する。API由来とhashを検証する取得スクリプトは[開発手順](docs/development.md#成果物を取得する)を参照。PRの検証ログを配布exeと取り違えない。
 2. ZIPを展開し、同梱の `Start-UltraTasks.cmd` を開く。起動入口は既存exeだけを使い、ローカルビルドを行わない。
 3. `Asia/Tokyo` の今日を表示する。保存先の既定は `%LOCALAPPDATA%\UltraTasks\demo\demo.sqlite`。新しい保存先は空のDBから始まり、再起動では保存済みデータを開く。
 

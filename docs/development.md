@@ -1,6 +1,6 @@
 # Windows版の開発と検証
 
-`crates/ultratasks-core`と`apps/desktop`の2クレートを使用する。coreは公開型と`Store`を公開し、SQLite・履歴処理は内部に閉じる。desktopはStoreを所有するDBスレッドとGPUIの入力・表示を接続する。検証済みの範囲は[プロトタイプの状態](prototype-status.md)を参照する。CI構成が存在することと、そのSHAの検証が成功したことは区別する。
+`crates/ultratasks-core`と`apps/desktop`の2クレートを使用する。coreは公開型と`Store`を公開し、SQLite・履歴処理は内部に閉じる。desktopはStoreを所有するDBスレッドとGPUIの入力・表示を接続する。検証済みの範囲は[プロトタイプの状態](prototype-status.md)、動く版の合格条件と並行PRのbase/head運用は[Windows基準版](windows-baseline.md)を参照する。CI構成が存在することと、そのSHAの検証が成功したことは区別する。
 
 ## 実行場所
 
