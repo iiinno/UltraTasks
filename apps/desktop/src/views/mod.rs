@@ -28,7 +28,9 @@ pub(crate) fn button(t: Tokens, id: impl Into<ElementId>) -> Button {
         .font_weight(CONTROL_WEIGHT)
         .relative()
         .focus_ring(false)
-        .focus_visible(move |s| s.shadow(focus_outline(t)))
+        .border_1()
+        .border_color(transparent_black())
+        .focus_visible(move |s| s.border_color(t.focus_ring))
         .when(t.canvas == t.surface_hover, |button| {
             button.group("desktop-control").child(
                 div()
@@ -39,6 +41,28 @@ pub(crate) fn button(t: Tokens, id: impl Into<ElementId>) -> Button {
                     .border_color(transparent_black())
                     .group_hover("desktop-control", move |s| s.border_color(t.focus_ring)),
             )
+        })
+}
+
+pub(crate) fn menu_trigger(
+    id: &'static str,
+    trigger: Button,
+    disabled: bool,
+    window: &mut Window,
+    cx: &mut App,
+) -> Button {
+    let state = window.use_keyed_state(id, cx, |_, cx| cx.focus_handle());
+    let focus = state.read(cx).clone();
+    trigger
+        .track_focus(&focus)
+        .on_a11y_action(accesskit::Action::Click, move |_, window, cx| {
+            if !disabled {
+                focus.dispatch_action(
+                    &gpui_kit::base::actions::Confirm { secondary: false },
+                    window,
+                    cx,
+                );
+            }
         })
 }
 
@@ -68,5 +92,7 @@ pub(crate) fn input_frame(id: EntityId, focus: &FocusHandle, t: Tokens) -> State
         .id(("input-focus", id))
         .track_focus(focus)
         .rounded(px(t.control_radius))
-        .focus_visible(move |s| s.shadow(focus_outline(t)))
+        .border_1()
+        .border_color(transparent_black())
+        .focus_visible(move |s| s.border_color(t.focus_ring))
 }

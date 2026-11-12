@@ -76,7 +76,7 @@ impl Render for Desktop {
             self.task_panel(window, cx)
         };
         let sidebar = self.sidebar(rail, cx);
-        let toolbar = self.location_bar(width, cx);
+        let toolbar = self.location_bar(width, window, cx);
         let status = self.status_bar(width, cx);
         let root = div()
             .id("ultratasks")
@@ -239,7 +239,7 @@ impl Render for Desktop {
     }
 }
 impl Desktop {
-    fn location_bar(&self, width: f32, cx: &mut Context<Self>) -> AnyElement {
+    fn location_bar(&self, width: f32, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let t = self.tokens;
         let location = self
             .filters
@@ -305,6 +305,7 @@ impl Desktop {
                             .accessibility_label(format!("{} 日付を移動", self.options.day.iso()))
                             .tooltip("日付を移動 Ctrl+D"),
                         Popup::Date,
+                        window,
                         cx,
                     ),
                 )
@@ -372,7 +373,7 @@ impl Desktop {
             .into_any_element()
     }
 
-    pub(crate) fn filter_trigger(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn filter_trigger(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let count = usize::from(self.filters.list.is_some())
             + usize::from(self.filters.status != StatusFilter::Open)
             + usize::from(self.filters.due != 0)
@@ -389,6 +390,7 @@ impl Desktop {
                 })
                 .selected(count > 0),
             Popup::Filters(self.filters.clone()),
+            window,
             cx,
         )
     }
@@ -398,6 +400,7 @@ impl Desktop {
         id: &'static str,
         trigger: Button,
         popup: Popup,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let kind = std::mem::discriminant(&popup);
@@ -412,8 +415,13 @@ impl Desktop {
             384.
         };
         let weak = cx.weak_entity();
+        let focus_id = if matches!(popup, Popup::Date) {
+            "date-trigger-focus"
+        } else {
+            "filters-trigger-focus"
+        };
         Popover::new(id)
-            .trigger(trigger)
+            .trigger(super::menu_trigger(focus_id, trigger, false, window, cx))
             .anchor(Anchor::TopLeft)
             .offset(px(6.))
             .w(px(width))

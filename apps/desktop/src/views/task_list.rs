@@ -11,7 +11,7 @@ use gpui_kit::{
 impl Desktop {
     pub(crate) fn task_panel(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = self.tokens;
@@ -79,7 +79,7 @@ impl Desktop {
                     .gap(px(8.))
                     .border_b_1()
                     .border_color(t.border)
-                    .child(self.filter_trigger(cx))
+                    .child(self.filter_trigger(window, cx))
                     .when(self.search_open, |d| {
                         let search_input = Styled::h(Input::new(&self.search).small(), px(28.))
                             .text_size(px(13.))
@@ -143,7 +143,9 @@ impl Desktop {
                     .key_context("TaskList")
                     .track_focus(&self.list_focus)
                     .focusable()
-                    .focus_visible(move |s| s.shadow(focus_outline(t)))
+                    .border_1()
+                    .border_color(transparent_black())
+                    .focus_visible(move |s| s.border_color(t.focus_ring))
                     .role(Role::List)
                     .aria_label("タスク一覧")
                     .flex_1()
@@ -250,7 +252,7 @@ impl Desktop {
 
     pub(crate) fn quick_task_content(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = self.tokens;
@@ -338,6 +340,9 @@ impl Desktop {
                                     .map(|name| format!("追加先: {name}"))
                                     .unwrap_or_else(|| "追加先リストを選択".into()),
                             )
+                            .map(|trigger| {
+                                super::menu_trigger("quick-list-focus", trigger, false, window, cx)
+                            })
                             .dropdown_menu({
                                 let weak = cx.weak_entity();
                                 let lists: Vec<_> = self
@@ -511,20 +516,22 @@ impl Desktop {
                             .truncate()
                             .child(title),
                     )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .max_w(px(if self.calendar_view { 72. } else { 320. }))
-                            .text_size(px(12.))
-                            .line_height(px(18.))
-                            .text_color(if selected {
-                                t.selection_text
-                            } else {
-                                t.text_secondary
-                            })
-                            .truncate()
-                            .child(subtitle),
-                    )
+                    .when(!self.calendar_view, |d| {
+                        d.child(
+                            div()
+                                .min_w_0()
+                                .max_w(px(320.))
+                                .text_size(px(12.))
+                                .line_height(px(18.))
+                                .text_color(if selected {
+                                    t.selection_text
+                                } else {
+                                    t.text_secondary
+                                })
+                                .truncate()
+                                .child(subtitle),
+                        )
+                    })
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, window, cx| {

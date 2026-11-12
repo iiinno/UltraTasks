@@ -724,6 +724,7 @@ impl Desktop {
             .accessibility_label("編集の操作")
             .tooltip("編集の操作")
             .disabled(self.busy)
+            .map(|trigger| super::menu_trigger("editor-menu-focus", trigger, self.busy, window, cx))
             .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
                 let cancel_view = weak.clone();
                 let menu = menu.item(PopupMenuItem::new("取消").icon(IconName::X).on_click(
