@@ -19,7 +19,13 @@ impl Desktop {
         let day_minutes = (end.unix_micros() - base.unix_micros()) as f32 / time::MINUTE as f32;
         let top = (-f32::from(self.agenda_scroll.offset().y)).max(0.);
         let viewport = f32::from(window.viewport_size().height);
-        let width = f32::from(self.agenda_scroll.bounds().size.width).max(300.);
+        let viewport_width = f32::from(window.viewport_size().width);
+        let (sidebar_width, task_width) = if viewport_width < 900. {
+            (48., 0.)
+        } else {
+            (t.sidebar_width, 280.)
+        };
+        let width = viewport_width - sidebar_width - task_width - 10.;
         let content_width = (width - 64.).max(180.);
         let start_hour = ((top - 60.).max(0.) / 60.).floor() as i64;
         let end_hour = ((top + viewport + 60.) / 60.).ceil() as i64;
