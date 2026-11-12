@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-12",
+  "title": "Design System: UltraTasks Windows",
+  "extensions": {
+    "colorMeta": {
+      "dark-action-background": { "role": "primary", "displayName": "標準accentをsRGBへ変換" },
+      "light-action-background": { "role": "primary", "displayName": "文字コントラストを補正したaccent" },
+      "dark-surface": { "role": "neutral", "displayName": "elevatedテーマの面" }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "操作本文", "purpose": "InterとWindowsの日本語fallback。静的faceの厳密な一致は未検証。" },
+      "editor-title": { "displayName": "詳細タイトル", "purpose": "Task・Eventのタイトルと関連Task名。" }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "editor-fade", "value": "150ms", "purpose": "通常設定の詳細表示。OSまたはアプリの動き軽減設定で0ms。" },
+      { "name": "agenda-move", "value": "200ms", "purpose": "時間軸の位置補間。OSまたはアプリの動き軽減設定で0ms。" }
+    ],
+    "breakpoints": [
+      { "name": "sidebar-rail", "value": "900px" },
+      { "name": "detail-available-width", "value": "900px of available content width" }
+    ]
+  },
+  "components": [
+    {
+      "name": "作成ボタン・dark",
+      "kind": "button",
+      "refersTo": "button-primary-dark",
+      "description": "GPUIの指定値を示すHTMLプレビュー。実アプリの描画証拠ではない。",
+      "html": "<button class=\"ds-create-dark\" type=\"button\">タスクを作成</button>",
+      "css": ".ds-create-dark{box-sizing:border-box;height:28px;padding:0 12px;border:1px solid transparent;border-radius:9999px;background:#5e6ad2;color:#fffeff;font:500 13px/20px Inter,'Yu Gothic UI',sans-serif}.ds-create-dark:hover,.ds-create-dark:active{background:#606cd8}.ds-create-dark:focus-visible{border-color:#8a8f98;outline:none}"
+    },
+    {
+      "name": "作成ボタン・light",
+      "kind": "button",
+      "refersTo": "button-primary-light",
+      "description": "lightの主要操作。GPUI版の色と寸法を表示するプレビュー。",
+      "html": "<button class=\"ds-create-light\" type=\"button\">タスクを作成</button>",
+      "css": ".ds-create-light{box-sizing:border-box;height:28px;padding:0 12px;border:1px solid transparent;border-radius:9999px;background:#626eca;color:#fffeff;font:500 13px/20px Inter,'Yu Gothic UI',sans-serif}.ds-create-light:hover,.ds-create-light:active{background:#5e6ac1}.ds-create-light:focus-visible{border-color:#60646c;outline:none}"
+    },
+    {
+      "name": "通常ボタン・dark",
+      "kind": "button",
+      "refersTo": "button-ghost-dark",
+      "description": "主領域で使う28pxの通常操作。",
+      "html": "<button class=\"ds-ghost\" type=\"button\">絞り込み</button>",
+      "css": ".ds-ghost{box-sizing:border-box;height:28px;padding:0 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:#e2e4e7;font:500 13px/20px Inter,'Yu Gothic UI',sans-serif}.ds-ghost:hover,.ds-ghost:active{background:#171718}.ds-ghost:focus-visible{border-color:#8a8f98;outline:none}"
+    },
+    {
+      "name": "日時入力・dark",
+      "kind": "input",
+      "refersTo": "input-dark",
+      "description": "日時入力の色と寸法。幅240pxはこのプレビューだけの指定。",
+      "html": "<input class=\"ds-date\" aria-label=\"日付\" value=\"2026-11-12\">",
+      "css": ".ds-date{box-sizing:border-box;width:240px;height:32px;padding:0 8px;border:1px solid #212224;border-radius:6px;background:#1a1a1b;color:#e2e4e7;font:450 13px/20px Inter,'Yu Gothic UI',sans-serif}.ds-date:hover{border-color:#8a8f98}.ds-date:focus-visible{border-color:#8a8f98;outline:none}"
+    },
+    {
+      "name": "状態切替・dark",
+      "kind": "chip",
+      "description": "通常一覧の状態切替。選択中の色を表示するプレビュー。",
+      "html": "<button class=\"ds-state\" type=\"button\" aria-pressed=\"true\">未完了</button>",
+      "css": ".ds-state{box-sizing:border-box;height:28px;padding:0 10px;border:1px solid transparent;border-radius:9999px;background:#1b1b1c;color:#e2e4e7;font:510 13px/20px Inter,'Yu Gothic UI',sans-serif}.ds-state:hover,.ds-state:active{background:#1b1b1c}.ds-state:focus-visible{border-color:#8a8f98;outline:none}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Linearの実画面に沿う操作UI",
+    "overview": "インストール済みLinearの表示と公開コードを照合し、GPUIへ対応させる。Task・Event・TimeBlock、保存、履歴、検索の意味はアプリ側で維持する。ここにあるHTMLは設計パネル用の参照表示であり、製品はRust/GPUIで描画する。",
+    "keyCharacteristics": ["コンパクトな一行一覧", "本文と属性を分けた詳細", "上寄せの作成画面", "中立色の面と青紫の主要操作"],
+    "rules": [{ "name": "確認範囲を分ける", "body": "CSS定義、sRGBへの変換値、実画面で確認した結果を同一視しない。", "section": "colors" }],
+    "dos": ["公開部品と既存の入力状態を使う", "source SHAを付けて操作と保存結果を確認する"],
+    "donts": ["ビルド成功だけでUI完成としない", "Linearの個人データや専用画像を配布物へ転載しない"]
+  }
+}

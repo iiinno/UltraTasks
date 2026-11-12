@@ -1,6 +1,6 @@
 # Linear UIの参照記録
 
-2026-11-12取得の公開資料と、UltraTasksの実装 `a0fdec56b8c7fd30f7a612c91cb21ce597ebd56c` の対応を記録する。利用者の指定に従い、Linearの構成・寸法・部品の状態をGPUIで再実装する。現在の画面仕様は[DESIGN.md](../DESIGN.md)にある。
+2026-11-12取得の公開資料と、UltraTasksの画面実装の対応を記録する。利用者の指定に従い、Linearの構成・寸法・部品の状態をGPUIで再実装する。現在の画面仕様は[DESIGN.md](../DESIGN.md)にある。
 
 本体の公開静的コード、起動shell、ホームページのデモ、公式ドキュメントは別の根拠である。下表の「採用値」はRustに指定した値を示す。認証後のLinear画面と新しいネイティブUIの同等性は未確認であり、CSSの定義を描画結果の実測値とは扱わない。
 
@@ -10,11 +10,11 @@
 | --- | --- | --- | --- |
 | サイドバー | [startup-entry.CRUNKDWa.js](https://static.linear.app/client/assets/startup-entry.CRUNKDWa.js)、`Q.prototype.sidebarWidth`。[WorkbenchSidebar.BZPhlcl5.js](https://static.linear.app/client/assets/WorkbenchSidebar.BZPhlcl5.js) | 幅244px、行高28px、上下margin各1px、角丸8px | 本体の静的定義。Linear側の通常幅の範囲192〜330pxは、UltraTasksの可変幅機能としては採用していない |
 | railと主領域 | [NavigationRailLayout.ice_k7Bz.js](https://static.linear.app/client/assets/NavigationRailLayout.ice_k7Bz.js)、[startup-root.Dl_Z8T-y.js](https://static.linear.app/client/assets/startup-root.Dl_Z8T-y.js)の `kj` | rail 48px、主領域の上下・右余白8px、角丸12px | 公開レイアウトを参照。900px未満でrailへ切り替える条件はUltraTasksの実装値 |
-| 主ヘッダー | [style-5dYGN5Zf.css](https://static.linear.app/client/assets/style-5dYGN5Zf.css)、`ContentViewHeader`、`--sx-8q2ft0: 57px` | 高さ58px | 本体の既定 `57 + thinPixel` を1xで解釈。描画済みヘッダーの実測ではない |
-| subheader | [ContentViewSubheader.DnImr3X9.js](https://static.linear.app/client/assets/ContentViewSubheader.DnImr3X9.js)、`kj.mainHeaderHeight` | 一覧の操作帯を44pxで指定 | `44 - thinPixel` は別のtoken。主ヘッダーの58pxと区別 |
+| 主ヘッダー | [startup-root.Dl_Z8T-y.js](https://static.linear.app/client/assets/startup-root.Dl_Z8T-y.js)の `mainHeaderHeight` と、インストール済みアプリの表示 | 高さ44px | `44 - thinPixel` と実画面を併用。汎用headerの上書きなし既定57pxは採用しない |
+| subheader | [ContentViewSubheader.DnImr3X9.js](https://static.linear.app/client/assets/ContentViewSubheader.DnImr3X9.js)と本体の `subHeaderHeight` | 一覧の操作帯を44pxで指定し、状態pillを配置 | 主ヘッダーと別の領域として扱う |
 | 一覧 | [IssueList.CFT1-SsJ.js](https://static.linear.app/client/assets/IssueList.CFT1-SsJ.js)、[ListCell.U7XnMyFw.js](https://static.linear.app/client/assets/ListCell.U7XnMyFw.js)、`kj.listIssueRowHeight`・`listHeaderHeight` | 固定行高44px、グループ見出し36px。タイトルと属性を横並びにする | 本体の静的定義と行構造を参照。GPUIの既存 `list`・`ListState`、TaskCache、選択とページングは維持 |
 | 詳細 | [IssueDetailsPaneSidebar.CvxZP-1H.js](https://static.linear.app/client/assets/IssueDetailsPaneSidebar.CvxZP-1H.js)、[本体CSS](https://static.linear.app/client/assets/style-5dYGN5Zf.css)の `sx-8w46s4`・`sx-5s0vsj` | 属性幅280〜400px、列間隔16〜56px、本文最大80ch。上padding21.5px、本文上margin32px・小幅時18px | CSSのclampを `available_width` の式へ対応。900px未満で縦配置する条件は詳細領域の幅に対する実装値 |
-| 作成 | [Creating issues](https://linear.app/docs/creating-issues)、[FastIssueCreateEditor.CZReDLse.js](https://static.linear.app/client/assets/FastIssueCreateEditor.CZReDLse.js)、本体CSSの `sx-c42dh1` | 中央Dialogに幅750px・角丸21pxを指定。追加先は同じDialog内のDropdownMenu | 公開されている作成画面と部品構造を参照。幅・角丸を指定した新GUIの見た目は未確認 |
+| 作成 | [Creating issues](https://linear.app/docs/creating-issues)、[FastIssueCreateEditor.CZReDLse.js](https://static.linear.app/client/assets/FastIssueCreateEditor.CZReDLse.js)、本体CSSの `sx-c42dh1` | 幅750px・角丸21px。上位置は参照画面の上部帯42pxと13vhの余白を合わせる。上部に追加先picker、枠なし18px/600のタイトル、右端のpill CTA | 実アプリの作成画面と公開部品の構造を参照。操作結果と対象SHAは検証記録に記載 |
 | 起点付き操作 | [Display options](https://linear.app/docs/display-options) | 絞り込みと時間割の日付をKit Popoverへ対応 | 操作の構成を参照。384px・344pxの幅とoffset 6pxはUltraTasksの指定値で、Linearの実測値ではない |
 | デモの文字と配置 | [Linearホームページ](https://linear.app/)、`Mmx1Wq_sidebar`・`bVIB3G_row`・`KFZpfa_viewBody`。[Comment on issues](https://linear.app/docs/comment-on-issues) | navigationと行のweight 510、詳細タイトル20px・weight 590・行高26.6px | デモのsidebar列232px・内側の行208px・header 44pxは本体の244px・58pxへ混同しない |
 | 本文フォント | [本体CSS](https://static.linear.app/client/assets/style-5dYGN5Zf.css)の `--font-size-small` とweight定義、[Inter 4.1](https://github.com/rsms/inter/releases/tag/v4.1) | 本文Inter 13px、行高19.5px、weight 450。共通controlは500 | 本体の小サイズ0.8125remと行高1.5へ対応。静的TTFのface選択とvariable 450の再現は未検証 |
@@ -25,13 +25,17 @@
 
 | 対象 | 根拠 | 採用値と限界 |
 | --- | --- | --- |
-| shellの面と境界 | [linear.app](https://linear.app/)の公開起動shell | darkはsidebar `#09090a`、canvas `#121213`、border `#212224`。lightは `#efeff0`・`#f9f9fa`・`#e2e2e2`。認証後のテーマ出力は未取得 |
+| shellの面と境界 | [公開起動shell](https://linear.app/auth/desktop) | darkはsidebar `#09090a`、canvas `#121213`、border `#212224`。lightは `#efeff0`・`#f9f9fa`・`#e2e2e2`。認証後のテーマ出力は未取得 |
 | darkの文字 | 同ホームページのデモ | 本文 `#e2e4e7`、補助文字 `#8a8f98` |
 | darkのhoverと選択 | デモのoverlayとshellのcanvas | `#ffffff05` と `#ffffff0a` を `#121213` へsRGBで合成し、8bitへ丸めた `#171718` と `#1b1b1c`。本体の解決済みテーマ値ではない |
-| lightの未確定部分 | 既存Radix Slateと本体テーマ生成器の基底色 | 本文・補助文字・hover・選択は既存値を維持。surfaceは白を採用 |
-| 主操作・focus・エラー・警告 | UltraTasksの適合と既存Radix | 主操作は中立色の反転、focusは補助文字色の1px輪郭。エラー・警告はTomato・Amberを維持。Linearの実測色とは呼ばない |
+| elevated面 | 本体 `elevatedTheme()` のbgBase | dark LCH `[9.2325,.85,272]` をD50からsRGBへ変換し `#1a1a1b`。lightは白 |
+| lightの未確定部分 | 既存Radix Slate | 本文・補助文字・hover・選択は既存値を維持 |
+| 主操作 | 標準テーマのaccentと `controlPrimary` | dark `#5e6ad2`、light `#626eca`。lightとdark hoverは文字コントラスト4.5:1を保つため明度だけ補正 |
+| focus・エラー・警告 | UltraTasksの適合と既存Radix | focusは補助文字色の1px輪郭、エラー・警告はTomato・Amber。Linearの実測色とは呼ばない |
 
 完全な色値、URL、主要資料のSHA-256、合成方法は[design/tokens.json](../design/tokens.json)の `source_evidence` にある。本体CSSの色は注入される `sx` 変数を参照しており、CSS取得だけで通常本体の全テーマ色が判明した扱いにはしない。
+
+インストール済みLinear 1.32.4を起動し、再読み込み後のInbox、All issues、Create issueを確認した。REAの解析shellは1.32.8であり、同じ版とは扱わない。実画面では主要操作の青紫、明るい作成面、コンパクトなheader、状態pillと空状態の配置を確認した。公開bundleのLCHはD50で、元accent・elevated面・変換式・補正量を設計JSONに残している。画面を見る操作と、コードから計算した色を区別する。
 
 ## GPUI部品と配布資産
 
@@ -43,6 +47,6 @@ Interは上流commit `e3a3d4c57d5ecc01453a575621882a384c1995a3` の静的TTFを�
 
 ## 確認状況
 
-この文書は取得記録と現行コードの静的照合である。初回CI run `43165128118` ではfmtが失敗し、整形反映後のCI結果は本書に未記録である。新GUI、再起動後の保存、Linearとの視覚比較は未確認であり、UI完成や同等性を記録しない。
+この文書は取得記録とコードの対応を示す。新UIの一覧、作成、詳細、保存、検索、Undo/Redo、時間割、再起動復元は実画面で確認した。対象SHA、確認した幅とテーマ、未解決の支援技術操作は[UIの検証記録](linear-ui-validation.md)に記載する。Linear通常画面との完全な一致やUI完成を判定した記録ではない。
 
-保存・検索・Undo/Redo・仮想化の機能基盤を維持することと、新UIで操作確認を終えたことは別である。後続のCIとGUIの結果は対象SHAと確認条件を付けて[プロトタイプの状態](prototype-status.md)へ記録する。以前の広い参照調査は[ui-reference-study.md](ui-reference-study.md)に残るが、今回の採用値は本書とDESIGN.mdを参照する。
+保存・検索・Undo/Redo・仮想化の機能基盤を維持することと、新UIで操作確認を終えたことは別である。CI成功だけで外観の同等性を判断しない。以前の広い参照調査は[ui-reference-study.md](ui-reference-study.md)に残るが、今回の採用値は本書とDESIGN.mdを参照する。
