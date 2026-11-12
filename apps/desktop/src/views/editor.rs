@@ -3,6 +3,7 @@ use gpui_kit::{
     assets::IconName,
     component::{
         Icon, Sizable,
+        menu::{DropdownMenu, PopupMenuItem},
         radio::{Radio, RadioGroup},
         select::Select,
     },
@@ -59,7 +60,7 @@ fn validation(form: &Form, area: InputArea, t: Tokens) -> Option<AnyElement> {
 impl Desktop {
     pub(crate) fn editor_panel(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let Some(form) = &self.form else {
@@ -71,6 +72,10 @@ impl Desktop {
         let is_block = matches!(draft.target, Target::Block { .. });
         let is_event = matches!(draft.target, Target::Event { .. });
         let has_time = is_block || is_event || is_task && draft.due != DueKind::None;
+        let title_invalid = form
+            .validation
+            .as_ref()
+            .is_some_and(|v| v.area == InputArea::Title);
         let schedule_invalid = form
             .validation
             .as_ref()
@@ -78,130 +83,143 @@ impl Desktop {
         let fields = form.fields.clone();
         let name = draft.target.name();
         let target_id = draft.target.id();
+        let width = f32::from(window.viewport_size().width);
+        let sidebar_width = if width < 900. { 48. } else { 244. };
+        let available_width = width - sidebar_width - 10.;
+        let stacked = available_width < 900.;
+        let properties_width = (available_width * 0.26087 + 66.087).clamp(280., 400.);
+        let column_gap = (available_width * 0.08696 - 55.304).clamp(16., 56.);
+        let text_system = window.text_system();
+        let font_id = text_system.resolve_font(&window.text_style().font());
+        let content_max_width = text_system.layout_width(font_id, px(t.body_size), '0') * 80.;
+        let has_properties = is_task || is_block || is_event;
+        let back_label = if self.calendar_view {
+            "時間割に戻る"
+        } else {
+            "タスク一覧に戻る"
+        };
         let mut body = div()
-            .id("editor-body")
             .v_flex()
-            .gap(px(20.))
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .p(px(16.));
+            .gap(px(24.))
+            .min_w_0()
+            .mt(px(if available_width <= 768. { 18. } else { 32. }))
+            .pb(px(24.));
+        let mut properties = div()
+            .id("editor-properties")
+            .v_flex()
+            .gap(px(24.))
+            .min_w_0()
+            .pt(px(8.))
+            .pb(px(24.))
+            .when(stacked && has_properties, |d| {
+                d.pt(px(24.)).border_t_1().border_color(t.border)
+            });
         if let Target::Block { task, .. } = &draft.target {
             let id = task.key.id;
             body = body.child(
-                div()
-                    .v_flex()
-                    .gap(px(6.))
+                button(t, "edit-related-task")
+                    .ghost()
+                    .small()
+                    .w_full()
+                    .h_auto()
+                    .min_h(px(32.))
+                    .px(px(0.))
+                    .py(px(6.))
+                    .mb(px(8.))
+                    .accessibility_label(format!("関連タスクを編集 {}", draft.title))
+                    .tooltip("関連タスクを開く")
                     .child(
                         div()
-                            .text_size(px(12.))
-                            .line_height(px(18.))
-                            .text_color(t.text_secondary)
-                            .child("関連タスク"),
-                    )
-                    .child(
-                        button(t, "edit-related-task")
-                            .ghost()
-                            .small()
+                            .h_flex()
+                            .items_start()
                             .w_full()
-                            .h_auto()
-                            .min_h(px(36.))
-                            .px(px(8.))
-                            .py(px(6.))
-                            .accessibility_label(format!("関連タスクを編集 {}", draft.title))
-                            .tooltip(draft.title.clone())
+                            .min_w_0()
+                            .gap(px(8.))
+                            .text_left()
                             .child(
                                 div()
-                                    .h_flex()
-                                    .w_full()
+                                    .flex_1()
                                     .min_w_0()
-                                    .gap(px(8.))
-                                    .text_left()
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .text_size(px(14.))
-                                            .line_height(px(20.))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .whitespace_normal()
-                                            .line_clamp(3)
-                                            .child(draft.title.clone()),
-                                    )
-                                    .child(
-                                        Icon::new(IconName::ChevronRight)
-                                            .with_size(px(14.))
-                                            .text_color(t.text_secondary)
-                                            .flex_shrink_0(),
-                                    ),
+                                    .text_size(px(20.))
+                                    .line_height(px(26.6))
+                                    .font_weight(FontWeight(590.))
+                                    .whitespace_normal()
+                                    .child(draft.title.clone()),
                             )
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.navigate(Navigation::Task(id), window, cx)
-                            })),
-                    ),
+                            .child(
+                                Icon::new(IconName::ChevronRight)
+                                    .with_size(px(16.))
+                                    .mt(px(5.))
+                                    .text_color(t.text_secondary)
+                                    .flex_shrink_0(),
+                            ),
+                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.navigate(Navigation::Task(id), window, cx)
+                    })),
             );
         } else {
             body = body.child(
                 div()
                     .v_flex()
-                    .gap(px(6.))
+                    .gap(px(8.))
+                    .mb(px(8.))
                     .child(
                         div()
-                            .text_size(px(12.))
-                            .line_height(px(18.))
-                            .text_color(t.text_secondary)
-                            .child("タイトル"),
-                    )
-                    .child(
-                        input_frame(
-                            form.title_input.entity_id(),
-                            &form.title_input.focus_handle(cx),
-                            t,
-                        )
-                        .child(
-                            Textarea::new(&form.title_input)
-                                .small()
-                                .text_size(px(14.))
-                                .line_height(px(20.))
-                                .bg(t.surface)
-                                .border_color(
-                                    if form
-                                        .validation
-                                        .as_ref()
-                                        .is_some_and(|v| v.area == InputArea::Title)
-                                    {
-                                        t.error_text
-                                    } else {
-                                        t.border
-                                    },
-                                )
-                                .h(px(72.))
-                                .aria_label("タイトル")
-                                .on_paste({
-                                    let weak = cx.weak_entity();
-                                    let serial = form.stamp.serial;
-                                    move |_, window, _| {
-                                        let weak = weak.clone();
-                                        window.on_next_frame(move |_, cx| {
-                                            let _ = weak.update(cx, |this, _| {
-                                                if let Some(form) = &mut this.form
-                                                    && form.stamp.serial == serial
-                                                {
-                                                    form.submit_ready = true;
-                                                }
-                                            });
-                                        });
-                                        false
-                                    }
+                            .id("editor-title")
+                            .track_focus(&form.title_input.focus_handle(cx))
+                            .rounded(px(t.control_radius))
+                            .border_1()
+                            .border_color(if title_invalid {
+                                t.error_text
+                            } else {
+                                transparent_black()
+                            })
+                            .focus_visible(move |s| {
+                                s.border_color(if title_invalid {
+                                    t.error_text
+                                } else {
+                                    t.focus_ring
                                 })
-                                .disabled(self.busy),
-                        ),
+                            })
+                            .child(
+                                Textarea::new(&form.title_input)
+                                    .appearance(false)
+                                    .bordered(false)
+                                    .px(px(0.))
+                                    .py(px(6.))
+                                    .text_size(px(20.))
+                                    .line_height(px(26.6))
+                                    .font_weight(FontWeight(590.))
+                                    .text_color(t.text_primary)
+                                    .bg(t.canvas)
+                                    .h(px(80.))
+                                    .aria_label("タイトル")
+                                    .on_paste({
+                                        let weak = cx.weak_entity();
+                                        let serial = form.stamp.serial;
+                                        move |_, window, _| {
+                                            let weak = weak.clone();
+                                            window.on_next_frame(move |_, cx| {
+                                                let _ = weak.update(cx, |this, _| {
+                                                    if let Some(form) = &mut this.form
+                                                        && form.stamp.serial == serial
+                                                    {
+                                                        form.submit_ready = true;
+                                                    }
+                                                });
+                                            });
+                                            false
+                                        }
+                                    })
+                                    .disabled(self.busy),
+                            ),
                     )
                     .children(validation(form, InputArea::Title, t)),
             );
         }
         if is_task {
-            body = body
+            properties = properties
                 .child(
                     div()
                         .id("task-state-field")
@@ -276,7 +294,7 @@ impl Desktop {
                 );
         }
         if is_event {
-            body = body.child(
+            properties = properties.child(
                 div()
                     .id("event-kind-field")
                     .role(Role::Group)
@@ -443,7 +461,7 @@ impl Desktop {
                     }
                 }
             }
-            body = body.child(schedule);
+            properties = properties.child(schedule);
         }
         if is_task || is_block || is_event {
             let label = if is_task {
@@ -451,7 +469,7 @@ impl Desktop {
             } else {
                 "カレンダー"
             };
-            body = body.child(
+            properties = properties.child(
                 div()
                     .v_flex()
                     .gap(px(6.))
@@ -622,9 +640,9 @@ impl Desktop {
             );
             body = body.child(work);
         }
-        body = body.children(validation(form, InputArea::Form, t));
+        properties = properties.children(validation(form, InputArea::Form, t));
         if let Some(conflict) = &form.conflict {
-            body = body.child(
+            properties = properties.child(
                 div()
                     .v_flex()
                     .gap(px(8.))
@@ -635,7 +653,7 @@ impl Desktop {
                     .text_color(t.warning_text)
                     .child("別の更新があるため保存していません")
                     .child(conflict.clone())
-                    .child("下書きは上の入力欄に残っています")
+                    .child("下書きは入力欄に残っています")
                     .child(
                         button(t, "copy-draft")
                             .ghost()
@@ -673,17 +691,87 @@ impl Desktop {
                     ),
             );
         }
+        let content = if stacked || !has_properties {
+            div()
+                .v_flex()
+                .w_full()
+                .max_w(content_max_width)
+                .mx_auto()
+                .px(px(16.))
+                .pt(px(21.5))
+                .child(body.w_full())
+                .child(properties.w_full())
+        } else {
+            div()
+                .h_flex()
+                .items_start()
+                .justify_center()
+                .w_full()
+                .px(px(column_gap))
+                .pr(px(column_gap + 14.))
+                .pt(px(21.5))
+                .gap(px(column_gap))
+                .child(body.flex_1().max_w(content_max_width))
+                .child(properties.w(px(properties_width)).flex_shrink_0())
+        };
         let delete = draft.target.delete();
+        let weak = cx.weak_entity();
+        let actions = button(t, "editor-actions")
+            .ghost()
+            .small()
+            .size(px(28.))
+            .icon(IconName::Ellipsis)
+            .accessibility_label("編集の操作")
+            .tooltip("編集の操作")
+            .disabled(self.busy)
+            .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+                let cancel_view = weak.clone();
+                let menu = menu.item(
+                    PopupMenuItem::new("取消")
+                        .icon(IconName::X)
+                        .on_click(move |_, window, cx| {
+                            let _ = cancel_view.update(cx, |this, cx| {
+                                if this.busy {
+                                    return;
+                                }
+                                let navigation = if this.calendar_view {
+                                    Navigation::Calendar
+                                } else {
+                                    Navigation::Tasks
+                                };
+                                this.navigate(navigation, window, cx);
+                            });
+                        }),
+                );
+                if let Some(target) = delete.clone() {
+                    let delete_view = weak.clone();
+                    menu.item(PopupMenuItem::separator()).item(
+                        PopupMenuItem::new("削除")
+                            .icon(IconName::Trash)
+                            .on_click(move |_, window, cx| {
+                                let _ = delete_view.update(cx, |this, cx| {
+                                    if !this.busy {
+                                        this.open_popup(Popup::Delete(target.clone()), window, cx);
+                                    }
+                                });
+                            }),
+                    )
+                } else {
+                    menu
+                }
+            });
         let panel = div()
             .v_flex()
             .size_full()
             .min_w_0()
+            .min_h_0()
+            .bg(t.canvas)
             .child(
                 div()
                     .h_flex()
-                    .h(px(40.))
+                    .h(px(t.header_height))
                     .flex_shrink_0()
-                    .px(px(12.))
+                    .px(px(16.))
                     .gap(px(8.))
                     .border_b_1()
                     .border_color(t.border)
@@ -693,18 +781,24 @@ impl Desktop {
                             .small()
                             .size(px(28.))
                             .icon(IconName::ArrowLeft)
-                            .accessibility_label("タスク一覧に戻る")
-                            .tooltip("タスク一覧に戻る")
+                            .accessibility_label(back_label)
+                            .tooltip(back_label)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.navigate(Navigation::Tasks, window, cx)
+                                let navigation = if this.calendar_view {
+                                    Navigation::Calendar
+                                } else {
+                                    Navigation::Tasks
+                                };
+                                this.navigate(navigation, window, cx)
                             })),
                     )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(16.))
-                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(px(13.))
+                            .line_height(px(20.))
+                            .font_weight(FontWeight::MEDIUM)
                             .child(name),
                     )
                     .when(self.busy || form.dirty, |d| {
@@ -714,64 +808,31 @@ impl Desktop {
                                 .text_color(t.text_secondary)
                                 .child(if self.busy { "保存中" } else { "未保存" }),
                         )
-                    }),
-            )
-            .child(body)
-            .child(
-                div()
-                    .h_flex()
-                    .gap(px(8.))
-                    .flex_shrink_0()
-                    .px(px(16.))
-                    .py(px(12.))
-                    .border_t_1()
-                    .border_color(t.border)
-                    .when_some(delete, |d, target| {
-                        d.child(
-                            button(t, "delete")
-                                .ghost()
-                                .small()
-                                .compact()
-                                .h(px(28.))
-                                .icon(IconName::Trash)
-                                .when(!self.busy, |b| {
-                                    b.text_color(t.error_text).hover(move |s| {
-                                        s.bg(t.error_background).text_color(t.error_text)
-                                    })
-                                })
-                                .label("削除")
-                                .disabled(self.busy)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_popup(Popup::Delete(target.clone()), window, cx)
-                                })),
-                        )
                     })
-                    .child(div().flex_1())
-                    .child(
-                        button(t, "cancel-editor")
-                            .ghost()
-                            .small()
-                            .compact()
-                            .h(px(28.))
-                            .label("取消")
-                            .disabled(self.busy)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.navigate(Navigation::Tasks, window, cx)
-                            })),
-                    )
                     .child(
                         button(t, "save-editor")
                             .primary()
                             .small()
-                            .h(px(32.))
-                            .px(px(16.))
+                            .h(px(28.))
+                            .px(px(12.))
                             .label("保存")
                             .tooltip("保存 · Ctrl+Enter")
                             .disabled(self.busy || self.recovery || form.conflict.is_some())
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.save_form(window, cx)),
                             ),
-                    ),
+                    )
+                    .child(actions),
+            )
+            .child(
+                div()
+                    .id("editor-body")
+                    .v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .child(content),
             );
         if self.motion.fade_ms > 0 {
             panel
