@@ -28,6 +28,7 @@ pub struct Tokens {
     pub text_secondary: Hsla,
     pub focus_ring: Hsla,
     pub action_background: Hsla,
+    pub action_hover: Hsla,
     pub action_text: Hsla,
     pub selection_background: Hsla,
     pub selection_text: Hsla,
@@ -54,14 +55,15 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
     let mut tokens = Tokens {
         canvas: color(0xf9f9fa, 0x121213),
         sidebar: color(0xefeff0, 0x09090a),
-        surface: color(0xffffff, 0x121213),
+        surface: color(0xffffff, 0x1a1a1b),
         surface_hover: color(0xf0f0f3, 0x171718),
         border: color(0xe2e2e2, 0x212224),
         text_primary: color(0x1c2024, 0xe2e4e7),
         text_secondary: color(0x60646c, 0x8a8f98),
         focus_ring: color(0x60646c, 0x8a8f98),
-        action_background: color(0x1c2024, 0xe2e4e7),
-        action_text: color(0xffffff, 0x121213),
+        action_background: color(0x626eca, 0x5e6ad2),
+        action_hover: color(0x5e6ac1, 0x606cd8),
+        action_text: color(0xfffeff, 0xfffeff),
         selection_background: color(0xe8e8ec, 0x1b1b1c),
         selection_text: color(0x1c2024, 0xe2e4e7),
         error_background: color(0xfeebe7, 0x391714),
@@ -73,7 +75,7 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
         secondary_size: 12.,
         secondary_line: 18.,
         sidebar_width: 244.,
-        header_height: 58.,
+        header_height: 44.,
         nav_height: 28.,
         control_height: 28.,
         row_height: 44.,
@@ -90,6 +92,7 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
         tokens.text_secondary = system.text;
         tokens.focus_ring = system.highlight;
         tokens.action_background = system.highlight;
+        tokens.action_hover = system.highlight;
         tokens.action_text = system.highlight_text;
         tokens.selection_background = system.highlight;
         tokens.selection_text = system.highlight_text;
@@ -177,6 +180,7 @@ mod tests {
             }
             pairs.extend([
                 ("action", "action", t.action_text, t.action_background),
+                ("action", "action_hover", t.action_text, t.action_hover),
                 (
                     "selection",
                     "selection",
@@ -244,8 +248,8 @@ mod tests {
                     assert_eq!(t.border, system.border);
                     assert_eq!(t.focus_ring, system.highlight);
                     assert_eq!(
-                        [t.action_background, t.selection_background],
-                        [system.highlight; 2]
+                        [t.action_background, t.action_hover, t.selection_background],
+                        [system.highlight; 3]
                     );
                     assert_eq!(
                         [t.action_text, t.selection_text],
@@ -260,7 +264,7 @@ mod tests {
                     assert!(ratio(t.selection_text, t.selection_background) >= 4.5);
                     assert_eq!(
                         geometry(t),
-                        [13., 19.5, 12., 18., 244., 58., 28., 28., 44., 6.]
+                        [13., 19.5, 12., 18., 244., 44., 28., 28., 44., 6.]
                     );
                 }
             }
@@ -274,7 +278,7 @@ mod tests {
         assert_eq!(geometry(light), geometry(dark));
         assert_eq!(
             geometry(light),
-            [13., 19.5, 12., 18., 244., 58., 28., 28., 44., 6.]
+            [13., 19.5, 12., 18., 244., 44., 28., 28., 44., 6.]
         );
     }
 }

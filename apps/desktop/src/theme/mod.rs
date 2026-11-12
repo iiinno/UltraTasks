@@ -84,8 +84,8 @@ fn apply_tokens(theme: &mut Theme, t: &Tokens, contrast: Option<&SystemColors>) 
     c.popover_foreground = t.text_primary;
     c.primary = t.action_background;
     c.primary_foreground = t.action_text;
-    c.primary_hover = t.action_background;
-    c.primary_active = t.action_background;
+    c.primary_hover = t.action_hover;
+    c.primary_active = t.action_hover;
     c.secondary = t.surface;
     c.secondary_foreground = t.text_primary;
     c.secondary_hover = t.surface_hover;
@@ -102,8 +102,8 @@ fn apply_tokens(theme: &mut Theme, t: &Tokens, contrast: Option<&SystemColors>) 
     c.button_active = t.surface_hover;
     c.button_primary = t.action_background;
     c.button_primary_foreground = t.action_text;
-    c.button_primary_hover = t.action_background;
-    c.button_primary_active = t.action_background;
+    c.button_primary_hover = t.action_hover;
+    c.button_primary_active = t.action_hover;
     c.button_secondary = t.surface;
     c.button_secondary_foreground = t.text_primary;
     c.button_secondary_hover = t.surface_hover;
@@ -179,6 +179,11 @@ mod tests {
             assert_eq!(theme.semantic_tokens().colors.ring, t.focus_ring);
             assert_eq!(theme.tokens.button_primary.color, t.action_background);
             assert_eq!(theme.button_primary_foreground, t.action_text);
+            assert_eq!(theme.primary_hover, t.action_hover);
+            assert_eq!(theme.primary_active, t.action_hover);
+            assert_eq!(theme.button_primary_hover, t.action_hover);
+            assert_eq!(theme.button_primary_active, t.action_hover);
+            assert_eq!(theme.popover, t.surface);
             assert_eq!(theme.tokens.list_hover.color, t.surface_hover);
             assert_eq!(theme.tokens.list_active.color, t.selection_background);
             assert_eq!(theme.button_danger_foreground, t.error_text);

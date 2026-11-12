@@ -8,7 +8,10 @@
       "border": "#e2e2e2",
       "text": "#1c2024",
       "muted": "#60646c",
-      "selected": "#e8e8ec"
+      "selected": "#e8e8ec",
+      "action": "#626eca",
+      "action_hover": "#5e6ac1",
+      "action_text": "#fffeff"
     },
     "slate": {
       "slate1": "#fcfcfd",
@@ -85,12 +88,15 @@
     "linear": {
       "canvas": "#121213",
       "sidebar": "#09090a",
-      "surface": "#121213",
+      "surface": "#1a1a1b",
       "hover": "#171718",
       "border": "#212224",
       "text": "#e2e4e7",
       "muted": "#8a8f98",
-      "selected": "#1b1b1c"
+      "selected": "#1b1b1c",
+      "action": "#5e6ad2",
+      "action_hover": "#606cd8",
+      "action_text": "#fffeff"
     },
     "slate": {
       "slate1": "#111113",
