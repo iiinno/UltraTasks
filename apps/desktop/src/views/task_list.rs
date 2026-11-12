@@ -2,7 +2,10 @@ use crate::app::*;
 use crate::presentation::task_list::subtitle;
 use gpui_kit::{
     assets::IconName,
-    component::{Icon, Sizable},
+    component::{
+        Icon, Sizable,
+        menu::{DropdownMenu, PopupMenuItem},
+    },
 };
 
 impl Desktop {
@@ -251,18 +254,16 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = self.tokens;
-        let collection = self
-            .filters
-            .list
-            .or_else(|| self.info.as_ref().map(|info| info.default_list))
-            .and_then(|id| {
-                self.collections.iter().find_map(|c| match c {
-                    Collection::List(list) if list.key.id == id => {
-                        Some(list.data.as_str().to_owned())
-                    }
-                    _ => None,
-                })
-            });
+        let quick_list = self
+            .quick_list
+            .or(self.filters.list)
+            .or_else(|| self.info.as_ref().map(|info| info.default_list));
+        let collection = quick_list.and_then(|id| {
+            self.collections.iter().find_map(|c| match c {
+                Collection::List(list) if list.key.id == id => Some(list.data.as_str().to_owned()),
+                _ => None,
+            })
+        });
         let quick_input = Styled::h(Input::new(&self.quick), px(40.))
             .text_size(px(20.))
             .font_weight(FontWeight(590.))
@@ -323,7 +324,7 @@ impl Desktop {
                             .child("追加先"),
                     )
                     .child(
-                        button(t, "collections")
+                        button(t, "quick-list-picker")
                             .ghost()
                             .compact()
                             .h(px(28.))
@@ -333,19 +334,46 @@ impl Desktop {
                             .label(
                                 collection
                                     .clone()
-                                    .unwrap_or_else(|| "リストを管理".into()),
+                                    .unwrap_or_else(|| "リストを選択".into()),
                             )
-                            .accessibility_label("追加先を確認・リストとカレンダーを管理")
+                            .accessibility_label("タスクの追加先リストを選択")
                             .tooltip(
                                 collection
-                                    .map(|name| {
-                                        format!("追加先: {name} · リスト・カレンダーを管理")
-                                    })
-                                    .unwrap_or_else(|| "リスト・カレンダーを管理".into()),
+                                    .map(|name| format!("追加先: {name}"))
+                                    .unwrap_or_else(|| "追加先リストを選択".into()),
                             )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_popup(Popup::Collections, window, cx)
-                            })),
+                            .dropdown_menu({
+                                let weak = cx.weak_entity();
+                                let lists: Vec<_> = self
+                                    .collections
+                                    .iter()
+                                    .filter_map(|collection| match collection {
+                                        Collection::List(list) => {
+                                            Some((list.key.id, list.data.as_str().to_owned()))
+                                        }
+                                        _ => None,
+                                    })
+                                    .collect();
+                                move |mut menu, _, _| {
+                                    for (id, title) in &lists {
+                                        let id = *id;
+                                        let weak = weak.clone();
+                                        menu = menu.item(
+                                            PopupMenuItem::new(title.clone())
+                                                .icon(IconName::List)
+                                                .checked(quick_list == Some(id))
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = weak.update(cx, |this, cx| {
+                                                        this.quick_list = Some(id);
+                                                        this.quick_version += 1;
+                                                        cx.notify();
+                                                    });
+                                                }),
+                                        );
+                                    }
+                                    menu
+                                }
+                            }),
                     ),
             )
             .child(
