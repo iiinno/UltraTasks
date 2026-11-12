@@ -460,22 +460,18 @@ impl Desktop {
                 d.child(super::validation_message("quick-error", message, t))
             })
             .child(
-                div()
-                    .h_flex()
-                    .justify_end()
-                    .p(px(12.))
-                    .child(
-                        button(t, "add-task")
-                            .primary()
-                            .h(px(28.))
-                            .rounded(px(9999.))
-                            .px(px(12.))
-                            .label("タスクを作成")
-                            .accessibility_label("タスクを作成")
-                            .tooltip("タスクを作成 · Enter")
-                            .disabled(self.busy || self.info.is_none() || self.recovery)
-                            .on_click(cx.listener(|this, _, window, cx| this.add_task(window, cx))),
-                    ),
+                div().h_flex().justify_end().p(px(12.)).child(
+                    button(t, "add-task")
+                        .primary()
+                        .h(px(28.))
+                        .rounded(px(9999.))
+                        .px(px(12.))
+                        .label("タスクを作成")
+                        .accessibility_label("タスクを作成")
+                        .tooltip("タスクを作成 · Enter")
+                        .disabled(self.busy || self.info.is_none() || self.recovery)
+                        .on_click(cx.listener(|this, _, window, cx| this.add_task(window, cx))),
+                ),
             )
             .into_any_element()
     }
