@@ -1,5 +1,8 @@
 use crate::app::*;
-use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::{
+    assets::IconName,
+    component::{Icon, Sizable, tooltip::Tooltip},
+};
 
 impl Desktop {
     pub(crate) fn agenda_panel(
@@ -54,6 +57,9 @@ impl Desktop {
                                 .top(px(if minute == 0 { 0. } else { -8. }))
                                 .line_height(px(16.))
                                 .w(px(56.))
+                                .when((day_minutes - 1440.).abs() <= 0.1, |d| {
+                                    d.w(px(48.)).text_right()
+                                })
                                 .text_size(px(12.))
                                 .text_color(t.text_secondary)
                                 .child(label),
@@ -64,7 +70,11 @@ impl Desktop {
                                 .left(px(56.))
                                 .right_0()
                                 .h(px(1.))
-                                .bg(t.border),
+                                .bg(if t.canvas == t.surface_hover {
+                                    t.border
+                                } else {
+                                    t.surface_hover
+                                }),
                         ),
                 );
             }
@@ -117,14 +127,18 @@ impl Desktop {
                 );
                 grid = grid.child(
                     button(t, ("dense", placement.index))
+                        .ghost()
+                        .small()
+                        .compact()
                         .absolute()
                         .top(px(placement.start))
                         .left(px(56.))
                         .right(px(8.))
                         .h(px(placement.end - placement.start))
                         .bg(t.surface)
-                        .border_1()
-                        .border_color(t.border)
+                        .border_l_1()
+                        .border_color(t.text_secondary)
+                        .rounded(px(3.))
                         .text_size(px(12.))
                         .accessibility_label(format!("{label} 候補一覧を開く"))
                         .tooltip("表示中の予定・作業枠を候補一覧で選ぶ")
@@ -164,13 +178,13 @@ impl Desktop {
                 } else {
                     t.surface
                 })
-                .border_l_2()
+                .border_l_1()
                 .border_color(if block.is_some() {
                     t.focus_ring
                 } else {
-                    t.border
+                    t.text_secondary
                 })
-                .rounded(px(t.control_radius))
+                .rounded(px(3.))
                 .text_color(if related {
                     t.selection_text
                 } else {
@@ -186,7 +200,7 @@ impl Desktop {
                 .focusable()
                 .focus(move |s| s.shadow(focus_outline(t)))
                 .when(actual_height >= 18., |d| d.overflow_hidden())
-                .px_2()
+                .px(px(8.))
                 .cursor_pointer()
                 .role(Role::Button)
                 .aria_label(accessible_label.clone())
@@ -201,32 +215,54 @@ impl Desktop {
                             div()
                                 .h_flex()
                                 .min_w_0()
-                                .gap_2()
+                                .gap(px(8.))
                                 .h(px(actual_height))
                                 .text_size(px(12.))
                                 .line_height(px(18.))
                                 .child(
-                                    div()
-                                        .flex_shrink_0()
-                                        .text_color(if related {
-                                            t.selection_text
-                                        } else {
-                                            t.text_secondary
-                                        })
-                                        .child(label.clone()),
+                                    Icon::new(if block.is_some() {
+                                        IconName::Clock
+                                    } else {
+                                        IconName::Calendar
+                                    })
+                                    .with_size(px(12.))
+                                    .flex_shrink_0(),
                                 )
                                 .child(
                                     div()
                                         .flex_1()
                                         .min_w_0()
-                                        .text_size(px(if actual_height >= 20. { 14. } else { 12. }))
+                                        .font_weight(FontWeight::MEDIUM)
                                         .truncate()
                                         .child(title.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .max_w(relative(0.5))
+                                        .text_color(if related {
+                                            t.selection_text
+                                        } else {
+                                            t.text_secondary
+                                        })
+                                        .truncate()
+                                        .child(label.clone()),
                                 ),
                         )
                     } else {
                         d.child(
                             div()
+                                .text_size(px(13.))
+                                .line_height(px(20.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .line_clamp(if actual_height >= 60. { 2 } else { 1 })
+                                .child(title.clone()),
+                        )
+                        .child(
+                            div()
+                                .h_flex()
+                                .min_w_0()
+                                .gap(px(4.))
                                 .text_size(px(12.))
                                 .line_height(px(18.))
                                 .text_color(if related {
@@ -234,13 +270,21 @@ impl Desktop {
                                 } else {
                                     t.text_secondary
                                 })
-                                .child(format!("{kind} · {label}")),
-                        )
-                        .child(
-                            div()
-                                .line_height(px(20.))
-                                .line_clamp(if actual_height >= 60. { 2 } else { 1 })
-                                .child(title.clone()),
+                                .child(
+                                    Icon::new(if block.is_some() {
+                                        IconName::Clock
+                                    } else {
+                                        IconName::Calendar
+                                    })
+                                    .with_size(px(12.))
+                                    .flex_shrink_0(),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .truncate()
+                                        .child(format!("{kind} · {label}")),
+                                ),
                         )
                     }
                 })
@@ -303,8 +347,12 @@ impl Desktop {
                     .left(px(56.))
                     .right(px(8.))
                     .h(px(30.))
+                    .px(px(8.))
+                    .text_size(px(12.))
+                    .line_height(px(28.))
                     .bg(t.selection_background)
-                    .border_2()
+                    .text_color(t.selection_text)
+                    .border_1()
                     .border_color(t.focus_ring)
                     .child("仮配置 · 解放して時刻を確認"),
             );
@@ -326,16 +374,21 @@ impl Desktop {
         }
         let mut all_day = div()
             .h_flex()
-            .gap_2()
-            .min_h(px(32.))
-            .p_1()
+            .gap(px(8.))
+            .min_h(px(36.))
+            .flex_shrink_0()
+            .py(px(4.))
+            .pr(px(8.))
+            .border_b_1()
+            .border_color(t.border)
             .overflow_hidden()
             .text_size(px(12.))
+            .text_color(t.text_secondary)
             .child(
                 div()
                     .w(px(48.))
                     .flex_shrink_0()
-                    .text_color(t.text_secondary)
+                    .text_right()
                     .child("終日"),
             );
         if self.all_day.is_empty() {
@@ -351,6 +404,11 @@ impl Desktop {
             let item = item.clone();
             all_day = all_day.child(
                 button(t, ("all-day", index))
+                    .ghost()
+                    .small()
+                    .compact()
+                    .h(px(28.))
+                    .icon(IconName::Calendar)
                     .flex_1()
                     .min_w_0()
                     .tooltip(time::title(&item).to_owned())
@@ -364,6 +422,10 @@ impl Desktop {
         if self.all_day_total > 3 {
             all_day = all_day.child(
                 button(t, "more-all-day")
+                    .ghost()
+                    .small()
+                    .compact()
+                    .h(px(28.))
                     .label(format!("全{}件", self.all_day_total))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.agenda_candidates = true;
@@ -375,9 +437,10 @@ impl Desktop {
             let mut items = div()
                 .id("agenda-candidates")
                 .v_flex()
-                .gap_2()
                 .flex_1()
                 .min_h_0()
+                .px(px(12.))
+                .py(px(4.))
                 .overflow_y_scroll();
             for (index, item) in self.all_day.iter().chain(self.agenda.iter()).enumerate() {
                 let item = item.clone();
@@ -394,10 +457,15 @@ impl Desktop {
                 let label = format!("{kind} {time_label} · {}", time::title(&item));
                 items = items.child(
                     button(t, ("candidate", index))
+                        .ghost()
+                        .small()
                         .w_full()
                         .h_auto()
-                        .min_h(px(60.))
-                        .py_2()
+                        .min_h(px(56.))
+                        .px(px(8.))
+                        .py(px(8.))
+                        .border_b_1()
+                        .border_color(t.border)
                         .accessibility_label(label.clone())
                         .tooltip(label)
                         .child(
@@ -405,21 +473,34 @@ impl Desktop {
                                 .v_flex()
                                 .w_full()
                                 .min_w_0()
-                                .gap_1()
+                                .gap(px(2.))
                                 .text_left()
                                 .whitespace_normal()
                                 .child(
                                     div()
-                                        .text_size(px(12.))
-                                        .line_height(px(18.))
-                                        .text_color(t.text_secondary)
-                                        .child(format!("{kind} · {time_label}")),
+                                        .text_size(px(13.))
+                                        .line_height(px(20.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .line_clamp(2)
+                                        .child(time::title(&item).to_owned()),
                                 )
                                 .child(
                                     div()
-                                        .line_height(px(20.))
-                                        .line_clamp(2)
-                                        .child(time::title(&item).to_owned()),
+                                        .h_flex()
+                                        .gap(px(4.))
+                                        .text_size(px(12.))
+                                        .line_height(px(18.))
+                                        .text_color(t.text_secondary)
+                                        .child(
+                                            Icon::new(if matches!(&item, AgendaItem::Event(_)) {
+                                                IconName::Calendar
+                                            } else {
+                                                IconName::Clock
+                                            })
+                                            .with_size(px(12.))
+                                            .flex_shrink_0(),
+                                        )
+                                        .child(format!("{kind} · {time_label}")),
                                 ),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -431,10 +512,17 @@ impl Desktop {
                 .child(
                     div()
                         .h_flex()
-                        .gap_2()
+                        .flex_wrap()
+                        .gap(px(4.))
+                        .py(px(8.))
                         .child(
                             button(t, "next-agenda")
-                                .label("時刻付きの次の候補")
+                                .ghost()
+                                .small()
+                                .compact()
+                                .h(px(28.))
+                                .icon(IconName::Clock)
+                                .label("時刻付きの続きを表示")
                                 .disabled(self.agenda_next.is_none() || self.agenda_loading)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.query_agenda(false, true, window, cx)
@@ -442,7 +530,12 @@ impl Desktop {
                         )
                         .child(
                             button(t, "next-all-day")
-                                .label("終日の次の候補")
+                                .ghost()
+                                .small()
+                                .compact()
+                                .h(px(28.))
+                                .icon(IconName::Calendar)
+                                .label("終日の続きを表示")
                                 .disabled(self.all_day_next.is_none() || self.all_day_loading)
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.query_agenda(true, true, window, cx)
@@ -469,49 +562,54 @@ impl Desktop {
         };
         div()
             .v_flex()
-            .gap_2()
             .size_full()
             .min_w_0()
             .child(
                 div()
                     .h_flex()
                     .h(px(40.))
-                    .justify_between()
+                    .flex_shrink_0()
+                    .px(px(12.))
+                    .gap(px(8.))
+                    .border_b_1()
+                    .border_color(t.border)
                     .child(
                         div()
-                            .v_flex()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("時間割"),
+                    )
+                    .when(self.agenda_loaded, |d| {
+                        d.child(
+                            div()
+                                .flex_shrink_0()
+                                .text_size(px(12.))
+                                .text_color(t.text_secondary)
+                                .child(format!("{}件", self.agenda_total)),
+                        )
+                    })
+                    .child(
+                        div()
+                            .flex_1()
                             .min_w_0()
-                            .child(
-                                div()
-                                    .h_flex()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_size(px(16.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .child("時間割"),
-                                    )
-                                    .when(self.agenda_loaded, |d| {
-                                        d.child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .text_color(t.text_secondary)
-                                                .child(format!("表示範囲 {}件", self.agenda_total)),
-                                        )
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(16.))
-                                    .text_color(t.text_secondary)
-                                    .child(self.options.zone.as_str().to_owned()),
-                            ),
+                            .text_size(px(12.))
+                            .text_color(t.text_secondary)
+                            .truncate()
+                            .child(self.options.zone.as_str().to_owned()),
                     )
                     .child(
                         button(t, "agenda-view")
+                            .ghost()
+                            .small()
+                            .compact()
+                            .h(px(28.))
+                            .icon(if self.agenda_candidates {
+                                IconName::Clock
+                            } else {
+                                IconName::List
+                            })
                             .label(if self.agenda_candidates {
-                                "時間軸へ"
+                                "時間軸"
                             } else {
                                 "候補一覧"
                             })
@@ -527,6 +625,8 @@ impl Desktop {
                 |d| {
                     d.child(
                         div()
+                            .px(px(12.))
+                            .py(px(8.))
                             .text_size(px(12.))
                             .text_color(t.text_secondary)
                             .child("この時間帯に予定はありません"),
@@ -536,6 +636,8 @@ impl Desktop {
             .when(self.agenda_loading, |d| {
                 d.child(
                     div()
+                        .px(px(12.))
+                        .py(px(8.))
                         .text_size(px(12.))
                         .text_color(t.text_secondary)
                         .child("表示範囲を読み込み中…"),
@@ -544,6 +646,13 @@ impl Desktop {
             .when(self.agenda_next.is_some(), |d| {
                 d.child(
                     button(t, "dense-more")
+                        .ghost()
+                        .small()
+                        .compact()
+                        .h(px(28.))
+                        .mx(px(12.))
+                        .my(px(4.))
+                        .icon(IconName::List)
                         .label(format!(
                             "この範囲は{}件 · 未取得の候補あり",
                             self.agenda_total

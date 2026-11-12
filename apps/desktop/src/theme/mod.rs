@@ -130,8 +130,15 @@ fn apply_tokens(theme: &mut Theme, t: &Tokens, contrast: Option<&SystemColors>) 
     c.drag_border = t.focus_ring;
     c.drop_target = t.selection_background;
     c.scrollbar = t.canvas;
-    c.scrollbar_thumb = t.text_secondary;
-    c.scrollbar_thumb_hover = t.text_primary;
+    c.scrollbar_thumb = t.border;
+    c.scrollbar_thumb_hover = t.text_secondary;
+    c.sidebar = t.surface;
+    c.sidebar_foreground = t.text_secondary;
+    c.sidebar_border = t.border;
+    c.sidebar_accent = t.surface_hover;
+    c.sidebar_accent_foreground = t.text_primary;
+    c.sidebar_primary = t.selection_background;
+    c.sidebar_primary_foreground = t.selection_text;
     c.tab = t.surface;
     c.tab_foreground = t.text_secondary;
     c.tab_bar = t.canvas;

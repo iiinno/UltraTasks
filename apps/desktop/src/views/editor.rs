@@ -1,5 +1,12 @@
 use crate::app::*;
-use gpui_kit::component::{radio::RadioGroup, select::Select};
+use gpui_kit::{
+    assets::IconName,
+    component::{
+        Icon, Sizable,
+        radio::{Radio, RadioGroup},
+        select::Select,
+    },
+};
 
 fn field(
     label: &'static str,
@@ -11,17 +18,19 @@ fn field(
 ) -> impl IntoElement {
     div()
         .v_flex()
-        .gap_1()
+        .gap(px(6.))
         .min_w_0()
         .child(
             div()
                 .text_size(px(12.))
+                .line_height(px(18.))
                 .text_color(t.text_secondary)
                 .child(label),
         )
         .child(
             input_frame(input.entity_id(), &input.focus_handle(cx), t).child(
-                Input::new(input)
+                Styled::h(Input::new(input).small(), px(32.))
+                    .text_size(px(13.))
                     .aria_label(label)
                     .disabled(disabled)
                     .bg(t.surface)
@@ -72,36 +81,77 @@ impl Desktop {
         let mut body = div()
             .id("editor-body")
             .v_flex()
-            .gap_4()
+            .gap(px(20.))
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
-            .py_2()
-            .px_1();
-        if is_block {
+            .p(px(16.));
+        if let Target::Block { task, .. } = &draft.target {
+            let id = task.key.id;
             body = body.child(
                 div()
                     .v_flex()
-                    .gap_1()
+                    .gap(px(6.))
                     .child(
                         div()
                             .text_size(px(12.))
+                            .line_height(px(18.))
                             .text_color(t.text_secondary)
                             .child("関連タスク"),
                     )
                     .child(
-                        div()
-                            .line_height(px(20.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(draft.title.clone()),
+                        button(t, "edit-related-task")
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .h_auto()
+                            .min_h(px(36.))
+                            .px(px(8.))
+                            .py(px(6.))
+                            .accessibility_label(format!("関連タスクを編集 {}", draft.title))
+                            .tooltip(draft.title.clone())
+                            .child(
+                                div()
+                                    .h_flex()
+                                    .w_full()
+                                    .min_w_0()
+                                    .gap(px(8.))
+                                    .text_left()
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .text_size(px(14.))
+                                            .line_height(px(20.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .whitespace_normal()
+                                            .line_clamp(3)
+                                            .child(draft.title.clone()),
+                                    )
+                                    .child(
+                                        Icon::new(IconName::ChevronRight)
+                                            .with_size(px(14.))
+                                            .text_color(t.text_secondary)
+                                            .flex_shrink_0(),
+                                    ),
+                            )
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.navigate(Navigation::Task(id), window, cx)
+                            })),
                     ),
             );
         } else {
             body = body.child(
                 div()
                     .v_flex()
-                    .gap_2()
-                    .child("タイトル")
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(18.))
+                            .text_color(t.text_secondary)
+                            .child("タイトル"),
+                    )
                     .child(
                         input_frame(
                             form.title_input.entity_id(),
@@ -110,6 +160,9 @@ impl Desktop {
                         )
                         .child(
                             Textarea::new(&form.title_input)
+                                .small()
+                                .text_size(px(14.))
+                                .line_height(px(20.))
                                 .bg(t.surface)
                                 .border_color(
                                     if form
@@ -155,11 +208,19 @@ impl Desktop {
                         .role(Role::Group)
                         .aria_label("状態")
                         .v_flex()
-                        .gap_2()
-                        .child("状態")
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(18.))
+                                .text_color(t.text_secondary)
+                                .child("状態"),
+                        )
                         .child(
                             RadioGroup::horizontal("task-state")
-                                .children(["未完了", "完了"])
+                                .children(["未完了", "完了"].map(|label| {
+                                    Radio::new(label).label(label).small().text_size(px(13.))
+                                }))
                                 .selected_index(Some(usize::from(draft.status == TaskStatus::Done)))
                                 .disabled(self.busy)
                                 .on_change(cx.listener(|this, index, _, cx| {
@@ -181,11 +242,19 @@ impl Desktop {
                         .role(Role::Group)
                         .aria_label("期限")
                         .v_flex()
-                        .gap_2()
-                        .child("期限")
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(18.))
+                                .text_color(t.text_secondary)
+                                .child("期限"),
+                        )
                         .child(
                             RadioGroup::horizontal("due-kind")
-                                .children(["なし", "日付", "日時"])
+                                .children(["なし", "日付", "日時"].map(|label| {
+                                    Radio::new(label).label(label).small().text_size(px(13.))
+                                }))
                                 .selected_index(Some(match draft.due {
                                     DueKind::None => 0,
                                     DueKind::Date => 1,
@@ -208,26 +277,43 @@ impl Desktop {
         }
         if is_event {
             body = body.child(
-                RadioGroup::horizontal("event-kind")
-                    .children(["時刻付き", "終日"])
-                    .selected_index(Some(usize::from(draft.all_day)))
-                    .disabled(self.busy)
-                    .on_change(cx.listener(|this, index, _, cx| {
-                        if let Some(form) = &mut this.form {
-                            form.draft.all_day = *index == 1;
-                            form.changed();
-                        }
-                        cx.notify();
-                    })),
+                div()
+                    .id("event-kind-field")
+                    .role(Role::Group)
+                    .aria_label("時間")
+                    .v_flex()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(18.))
+                            .text_color(t.text_secondary)
+                            .child("時間"),
+                    )
+                    .child(
+                        RadioGroup::horizontal("event-kind")
+                            .children(["時刻付き", "終日"].map(|label| {
+                                Radio::new(label).label(label).small().text_size(px(13.))
+                            }))
+                            .selected_index(Some(usize::from(draft.all_day)))
+                            .disabled(self.busy)
+                            .on_change(cx.listener(|this, index, _, cx| {
+                                if let Some(form) = &mut this.form {
+                                    form.draft.all_day = *index == 1;
+                                    form.changed();
+                                }
+                                cx.notify();
+                            })),
+                    ),
             );
         }
         if has_time {
             let with_clock = !draft.all_day && (!is_task || draft.due == DueKind::At);
-            let mut schedule = div().v_flex().gap_3().child(
+            let mut schedule = div().v_flex().gap(px(12.)).child(
                 div()
                     .h_flex()
                     .items_end()
-                    .gap_2()
+                    .gap(px(8.))
                     .child(div().flex_1().min_w_0().child(field(
                         if is_task { "期限日" } else { "開始日" },
                         &fields[0],
@@ -256,7 +342,7 @@ impl Desktop {
                     div()
                         .h_flex()
                         .items_end()
-                        .gap_2()
+                        .gap(px(8.))
                         .child(div().flex_1().min_w_0().child(field(
                             if draft.all_day {
                                 "最終日（この日まで）"
@@ -283,13 +369,16 @@ impl Desktop {
             }
             schedule = schedule.children(validation(form, InputArea::Schedule, t));
             if with_clock {
-                schedule =
-                    schedule.child(div().text_size(px(12.)).text_color(t.text_secondary).child(
-                        format!(
-                            "日付 YYYY-MM-DD · 時刻 9:00 / 9時 · {}",
-                            self.options.zone.as_str()
-                        ),
-                    ));
+                schedule = schedule.child(
+                    div()
+                        .v_flex()
+                        .gap(px(2.))
+                        .text_size(px(12.))
+                        .line_height(px(18.))
+                        .text_color(t.text_secondary)
+                        .child("YYYY-MM-DD · 9:00 / 9時")
+                        .child(self.options.zone.as_str().to_owned()),
+                );
                 for end in [false, true] {
                     if end && is_task {
                         continue;
@@ -308,7 +397,9 @@ impl Desktop {
                         schedule = schedule.child(
                             div()
                                 .v_flex()
-                                .gap_2()
+                                .gap(px(8.))
+                                .text_size(px(13.))
+                                .line_height(px(18.))
                                 .child(if end {
                                     "終了時刻が二度あります"
                                 } else {
@@ -320,7 +411,9 @@ impl Desktop {
                                     } else {
                                         "start-overlap"
                                     })
-                                    .children([earlier, later])
+                                    .children([earlier, later].map(|label| {
+                                        Radio::from(label).small().text_size(px(13.))
+                                    }))
                                     .selected_index(match selected {
                                         OverlapChoice::Reject => None,
                                         OverlapChoice::Earlier => Some(0),
@@ -357,13 +450,26 @@ impl Desktop {
                 "カレンダー"
             };
             body = body.child(
-                div().v_flex().gap_2().child(label).child(
-                    Select::new(&form.collection)
-                        .accessibility_label(label)
-                        .placeholder("所属先を選ぶ")
-                        .disabled(self.busy)
-                        .w_full(),
-                ),
+                div()
+                    .v_flex()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(18.))
+                            .text_color(t.text_secondary)
+                            .child(label),
+                    )
+                    .child(
+                        Select::new(&form.collection)
+                            .small()
+                            .h(px(32.))
+                            .text_size(px(13.))
+                            .accessibility_label(label)
+                            .placeholder("所属先を選ぶ")
+                            .disabled(self.busy)
+                            .w_full(),
+                    ),
             );
         }
         if let Target::Task {
@@ -372,33 +478,75 @@ impl Desktop {
             expected,
         } = &draft.target
         {
-            body = body.child(
-                div()
-                    .h_flex()
-                    .justify_between()
-                    .pt_2()
-                    .border_t_1()
-                    .border_color(t.border)
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("作業時間"))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(t.text_secondary)
-                            .child(format!("{}件", blocks.len())),
-                    ),
-            );
-            if blocks.is_empty() {
-                body = body.child(
+            let mut work = div()
+                .v_flex()
+                .gap(px(6.))
+                .pt(px(16.))
+                .border_t_1()
+                .border_color(t.border)
+                .child(
                     div()
+                        .h_flex()
+                        .justify_between()
+                        .child(
+                            div()
+                                .text_size(px(13.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child("作業時間"),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(t.text_secondary)
+                                .child(format!("{}件", blocks.len())),
+                        ),
+                );
+            if blocks.is_empty() {
+                work = work.child(
+                    div()
+                        .text_size(px(12.))
+                        .line_height(px(18.))
                         .text_color(t.text_secondary)
                         .child("作業時間は未設定です"),
                 );
             }
             for (index, block) in blocks.iter().enumerate() {
                 let id = block.key.id;
-                body = body.child(
+                let label = time::span_label(&block.data.span, &self.options.zone);
+                work = work.child(
                     button(t, ("related-block", index))
-                        .label(time::span_label(&block.data.span, &self.options.zone))
+                        .ghost()
+                        .small()
+                        .w_full()
+                        .h_auto()
+                        .min_h(px(32.))
+                        .px(px(8.))
+                        .py(px(6.))
+                        .accessibility_label(format!("作業時間を編集 {label}"))
+                        .tooltip(label.clone())
+                        .child(
+                            div()
+                                .h_flex()
+                                .w_full()
+                                .min_w_0()
+                                .gap(px(8.))
+                                .child(Icon::new(IconName::Clock).with_size(px(14.)))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_size(px(13.))
+                                        .line_height(px(18.))
+                                        .text_left()
+                                        .whitespace_normal()
+                                        .child(label),
+                                )
+                                .child(
+                                    Icon::new(IconName::ChevronRight)
+                                        .with_size(px(14.))
+                                        .text_color(t.text_secondary),
+                                ),
+                        )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.navigate(
                                 Navigation::Entity(core::EntityId::TimeBlock(id)),
@@ -410,10 +558,15 @@ impl Desktop {
             }
             let id = *id;
             let exists = expected.is_some();
-            body = body.child(
+            work = work.child(
                 div().h_flex().child(
                     button(t, "add-block")
-                        .label("＋ 作業時間を追加")
+                        .ghost()
+                        .small()
+                        .compact()
+                        .h(px(28.))
+                        .icon(IconName::Plus)
+                        .label("作業時間を追加")
                         .disabled(self.busy || !exists)
                         .on_click(cx.listener(move |this, _, window, cx| {
                             if this.form.as_ref().is_some_and(|f| f.dirty) {
@@ -465,64 +618,64 @@ impl Desktop {
                         })),
                 ),
             );
-        }
-        if let Target::Block { task, .. } = &draft.target {
-            let id = task.key.id;
-            body = body.child(
-                div().h_flex().child(
-                    button(t, "edit-related-task")
-                        .label("タスクを編集")
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.navigate(Navigation::Task(id), window, cx)
-                        })),
-                ),
-            );
+            body = body.child(work);
         }
         body = body.children(validation(form, InputArea::Form, t));
         if let Some(conflict) = &form.conflict {
-            body = body
-                .child(
-                    div()
-                        .v_flex()
-                        .gap_2()
-                        .p_3()
-                        .bg(t.warning_background)
-                        .text_color(t.warning_text)
-                        .child("別の更新があるため保存していません")
-                        .child(conflict.clone())
-                        .child("下書きは上の入力欄に残っています"),
-                )
-                .child(
-                    button(t, "copy-draft")
-                        .label("下書きをコピー")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(form) = &this.form {
-                                let text =
-                                    std::iter::once(form.title_input.read(cx).value().to_string())
-                                        .chain(
-                                            form.fields
-                                                .iter()
-                                                .map(|f| f.read(cx).value().to_string()),
-                                        )
-                                        .collect::<Vec<_>>()
-                                        .join("\n");
-                                cx.write_to_clipboard(ClipboardItem::new_string(text));
-                            }
-                        })),
-                )
-                .child(
-                    button(t, "reload-entity")
-                        .label("下書きを破棄して最新を開く")
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.discard_form();
-                            this.navigate_now(Navigation::Entity(target_id), window, cx);
-                        })),
-                );
+            body = body.child(
+                div()
+                    .v_flex()
+                    .gap(px(8.))
+                    .p(px(12.))
+                    .text_size(px(13.))
+                    .line_height(px(20.))
+                    .bg(t.warning_background)
+                    .text_color(t.warning_text)
+                    .child("別の更新があるため保存していません")
+                    .child(conflict.clone())
+                    .child("下書きは上の入力欄に残っています")
+                    .child(
+                        button(t, "copy-draft")
+                            .ghost()
+                            .small()
+                            .compact()
+                            .h(px(28.))
+                            .icon(IconName::Copy)
+                            .label("下書きをコピー")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(form) = &this.form {
+                                    let text = std::iter::once(
+                                        form.title_input.read(cx).value().to_string(),
+                                    )
+                                    .chain(
+                                        form.fields
+                                            .iter()
+                                            .map(|f| f.read(cx).value().to_string()),
+                                    )
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                                }
+                            })),
+                    )
+                    .child(
+                        button(t, "reload-entity")
+                            .ghost()
+                            .small()
+                            .compact()
+                            .h(px(28.))
+                            .icon(IconName::RotateCcw)
+                            .label("下書きを破棄して最新を開く")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.discard_form();
+                                this.navigate_now(Navigation::Entity(target_id), window, cx);
+                            })),
+                    ),
+            );
         }
         let delete = draft.target.delete();
         let panel = div()
             .v_flex()
-            .gap_2()
             .size_full()
             .min_w_0()
             .child(
@@ -530,45 +683,62 @@ impl Desktop {
                     .h_flex()
                     .h(px(40.))
                     .flex_shrink_0()
-                    .justify_between()
+                    .px(px(12.))
+                    .gap(px(8.))
+                    .border_b_1()
+                    .border_color(t.border)
                     .child(
                         button(t, "back-tasks")
-                            .label("← タスクへ")
+                            .ghost()
+                            .small()
+                            .size(px(28.))
+                            .icon(IconName::ArrowLeft)
+                            .accessibility_label("タスク一覧に戻る")
+                            .tooltip("タスク一覧に戻る")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.navigate(Navigation::Tasks, window, cx)
                             })),
                     )
                     .child(
                         div()
+                            .flex_1()
+                            .min_w_0()
                             .text_size(px(16.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(name),
-                    ),
-            )
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(t.text_secondary)
-                    .child(if self.busy {
-                        "保存中"
-                    } else if form.dirty {
-                        "未保存の変更"
-                    } else {
-                        "編集して保存できます"
+                    )
+                    .when(self.busy || form.dirty, |d| {
+                        d.child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(t.text_secondary)
+                                .child(if self.busy { "保存中" } else { "未保存" }),
+                        )
                     }),
             )
             .child(body)
             .child(
                 div()
                     .h_flex()
-                    .gap_2()
+                    .gap(px(8.))
                     .flex_shrink_0()
-                    .pt_3()
+                    .px(px(16.))
+                    .py(px(12.))
                     .border_t_1()
                     .border_color(t.border)
                     .when_some(delete, |d, target| {
                         d.child(
                             button(t, "delete")
+                                .ghost()
+                                .small()
+                                .compact()
+                                .h(px(28.))
+                                .icon(IconName::Trash)
+                                .when(!self.busy, |b| {
+                                    b.text_color(t.error_text).hover(move |s| {
+                                        s.bg(t.error_background).text_color(t.error_text)
+                                    })
+                                })
                                 .label("削除")
                                 .disabled(self.busy)
                                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -579,6 +749,10 @@ impl Desktop {
                     .child(div().flex_1())
                     .child(
                         button(t, "cancel-editor")
+                            .ghost()
+                            .small()
+                            .compact()
+                            .h(px(28.))
                             .label("取消")
                             .disabled(self.busy)
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -588,7 +762,11 @@ impl Desktop {
                     .child(
                         button(t, "save-editor")
                             .primary()
+                            .small()
+                            .h(px(32.))
+                            .px(px(16.))
                             .label("保存")
+                            .tooltip("保存 · Ctrl+Enter")
                             .disabled(self.busy || self.recovery || form.conflict.is_some())
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.save_form(window, cx)),

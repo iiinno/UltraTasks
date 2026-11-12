@@ -1,6 +1,9 @@
 use crate::app::*;
 use crate::diagnostics::micros;
-use gpui_kit::component::radio::RadioGroup;
+use gpui_kit::{
+    assets::IconName,
+    component::{Icon, Selectable, Sizable, radio::RadioGroup, tooltip::Tooltip},
+};
 use std::time::Instant as Clock;
 
 fn operation_name(kind: OperationKind) -> &'static str {
@@ -35,32 +38,45 @@ impl Render for Desktop {
         }
         let t = self.tokens;
         let width = f32::from(window.viewport_size().width);
-        let compact = width < 900.;
-        let margin = if width >= 1100. { 24. } else { 16. };
-        let left_width = ((width - 2. * margin - 16.) * 0.3684).clamp(344., 448.);
-        let left = if self.form.is_some() {
-            self.editor_panel(window, cx)
-        } else {
-            self.task_panel(window, cx)
-        };
-        let agenda = self.agenda_panel(window, cx);
-        let mut columns = div().h_flex().items_stretch().gap_4().flex_1().min_h_0();
+        let rail = width < 1000.;
+        let compact = width < 780.;
+        let mut columns = div()
+            .h_flex()
+            .items_stretch()
+            .flex_1()
+            .min_w_0()
+            .min_h_0();
         if !compact || !self.compact_agenda {
+            let left = if self.form.is_some() {
+                self.editor_panel(window, cx)
+            } else {
+                self.task_panel(window, cx)
+            };
             columns = columns.child(
                 div()
                     .v_flex()
-                    .w(if compact {
-                        px((width - 2. * margin).max(200.))
-                    } else {
-                        px(left_width)
-                    })
+                    .w(px(360.))
+                    .flex_shrink_0()
+                    .min_w_0()
                     .min_h_0()
+                    .when(compact, |d| d.w_full())
+                    .when(!compact, |d| d.border_r_1().border_color(t.border))
                     .child(left),
             );
         }
         if !compact || self.compact_agenda {
-            columns = columns.child(div().flex_1().min_w_0().min_h_0().child(agenda));
+            columns = columns.child(
+                div()
+                    .v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .child(self.agenda_panel(window, cx)),
+            );
         }
+        let sidebar = self.sidebar(rail, cx);
+        let toolbar = self.location_bar(width, cx);
+        let status = self.status_bar(width, cx);
         let popup = self.render_popup(window, cx);
         let root = div()
             .id("ultratasks")
@@ -74,9 +90,6 @@ impl Render for Desktop {
             .font_family("Yu Gothic UI")
             .text_size(px(t.body_size))
             .line_height(px(t.body_line))
-            .px(px(margin))
-            .pb_4()
-            .gap_4()
             .on_action(cx.listener(|this, _: &NewTask, window, cx| {
                 this.navigate(Navigation::QuickInput, window, cx)
             }))
@@ -144,202 +157,69 @@ impl Render for Desktop {
             .child(
                 div()
                     .h_flex()
-                    .h(px(56.))
-                    .flex_shrink_0()
-                    .gap_2()
-                    .border_b_1()
-                    .border_color(t.border)
-                    .when(width >= 1000., |d| {
-                        d.child(
-                            div()
-                                .mr_4()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child("UltraTasks"),
-                        )
-                    })
-                    .child(
-                        button(t, "previous-day")
-                            .label("‹")
-                            .accessibility_label("前日")
-                            .tooltip("前日 Alt+PageUp")
-                            .w(px(32.))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.change_day(-1, window, cx)),
-                            ),
-                    )
-                    .when(width >= 900., |d| {
-                        d.child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(t.text_secondary)
-                                .child(format!("{}年", self.options.day.ymd().0)),
-                        )
-                    })
-                    .child(
-                        button(t, "selected-date")
-                            .h(px(40.))
-                            .child(
-                                div()
-                                    .text_size(px(20.))
-                                    .line_height(px(28.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(time::date_heading(self.options.day)),
-                            )
-                            .accessibility_label(format!(
-                                "{} {} 日付を移動",
-                                self.options.day.iso(),
-                                time::date_heading(self.options.day)
-                            ))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_popup(Popup::Date, window, cx)
-                            })),
-                    )
-                    .child(
-                        button(t, "next-day")
-                            .label("›")
-                            .accessibility_label("翌日")
-                            .tooltip("翌日 Alt+PageDown")
-                            .w(px(32.))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.change_day(1, window, cx)),
-                            ),
-                    )
-                    .child(
-                        button(t, "today")
-                            .label("今日")
-                            .disabled(
-                                Date::today(&self.options.zone).ok() == Some(self.options.day),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if let Ok(day) = Date::today(&this.options.zone) {
-                                    this.navigate(Navigation::Day(day), window, cx);
-                                }
-                            })),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        button(t, "add-event")
-                            .label("＋ 予定")
-                            .disabled(self.info.is_none())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.navigate(Navigation::Event, window, cx)
-                            })),
-                    )
-                    .child(button(t, "settings").label("表示").on_click(cx.listener(
-                        |this, _, window, cx| {
-                            this.open_popup(Popup::Settings(this.settings.clone()), window, cx)
-                        },
-                    ))),
-            )
-            .when(compact, |d| {
-                d.child(
-                    div()
-                        .h_flex()
-                        .gap_2()
-                        .child(button(t, "task-tab").label("タスク").on_click(cx.listener(
-                            |this, _, _, cx| {
-                                this.compact_agenda = false;
-                                cx.notify();
-                            },
-                        )))
-                        .child(
-                            button(t, "agenda-tab")
-                                .label("時間割")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.compact_agenda = true;
-                                    cx.notify();
-                                })),
-                        ),
-                )
-            })
-            .child(columns)
-            .child(
-                div()
-                    .h_flex()
-                    .gap_2()
-                    .min_h(px(32.))
-                    .flex_shrink_0()
-                    .border_t_1()
-                    .border_color(t.border)
-                    .pt_2()
+                    .items_stretch()
+                    .size_full()
+                    .min_h_0()
+                    .child(sidebar)
                     .child(
                         div()
-                            .id("save-status")
+                            .v_flex()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(12.))
-                            .text_color(if self.error {
-                                t.error_text
-                            } else {
-                                t.text_secondary
+                            .min_h_0()
+                            .child(toolbar)
+                            .when(compact, |d| {
+                                d.child(
+                                    div()
+                                        .h_flex()
+                                        .h(px(36.))
+                                        .flex_shrink_0()
+                                        .px_3()
+                                        .gap_1()
+                                        .border_b_1()
+                                        .border_color(t.border)
+                                        .child(
+                                            button(t, "task-tab")
+                                                .h(px(28.))
+                                                .icon(IconName::ListTodo)
+                                                .label(if self.form.is_some() {
+                                                    "編集"
+                                                } else {
+                                                    "タスク"
+                                                })
+                                                .selected(!self.compact_agenda)
+                                                .when(!self.compact_agenda, |button| {
+                                                    button
+                                                        .bg(t.selection_background)
+                                                        .text_color(t.selection_text)
+                                                })
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.compact_agenda = false;
+                                                    this.focus.focus(window, cx);
+                                                    cx.notify();
+                                                })),
+                                        )
+                                        .child(
+                                            button(t, "agenda-tab")
+                                                .h(px(28.))
+                                                .icon(IconName::CalendarDays)
+                                                .label("時間割")
+                                                .selected(self.compact_agenda)
+                                                .when(self.compact_agenda, |button| {
+                                                    button
+                                                        .bg(t.selection_background)
+                                                        .text_color(t.selection_text)
+                                                })
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.compact_agenda = true;
+                                                    this.focus.focus(window, cx);
+                                                    cx.notify();
+                                                })),
+                                        ),
+                                )
                             })
-                            .bg(if self.error {
-                                t.error_background
-                            } else {
-                                t.canvas
-                            })
-                            .role(Role::Status)
-                            .aria_label(self.status.clone())
-                            .line_clamp(2)
-                            .child(self.status.clone()),
-                    )
-                    .when_some(self.saved_task, |d, id| {
-                        d.child(
-                            button(t, "open-saved-task")
-                                .label("タスクを開く")
-                                .disabled(self.busy)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.navigate(Navigation::Task(id), window, cx)
-                                })),
-                        )
-                    })
-                    .when(
-                        self.recovery || self.retryable_write() || self.read_error,
-                        |d| {
-                            d.child(
-                                button(t, "retry")
-                                    .label(if self.recovery {
-                                        "保存先を開き直す"
-                                    } else {
-                                        "再試行"
-                                    })
-                                    .disabled(self.busy)
-                                    .on_click(
-                                        cx.listener(|this, _, window, cx| this.retry(window, cx)),
-                                    ),
-                            )
-                        },
-                    )
-                    .child(
-                        button(t, "undo")
-                            .label("元に戻す")
-                            .tooltip(
-                                self.history
-                                    .undo
-                                    .as_ref()
-                                    .map(|e| format!("{}を元に戻す", operation_name(e.kind)))
-                                    .unwrap_or_else(|| "戻せる操作はありません".into()),
-                            )
-                            .disabled(self.history.undo.is_none() || self.busy || self.recovery)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.history_action(false, window, cx)
-                            })),
-                    )
-                    .child(
-                        button(t, "redo")
-                            .label("やり直す")
-                            .tooltip(
-                                self.history
-                                    .redo
-                                    .as_ref()
-                                    .map(|e| format!("{}をやり直す", operation_name(e.kind)))
-                                    .unwrap_or_else(|| "やり直せる操作はありません".into()),
-                            )
-                            .disabled(self.history.redo.is_none() || self.busy || self.recovery)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.history_action(true, window, cx)
-                            })),
+                            .child(columns)
+                            .child(status),
                     ),
             )
             .when_some(popup, |d, popup| d.child(popup));
@@ -353,6 +233,216 @@ impl Render for Desktop {
     }
 }
 impl Desktop {
+    fn location_bar(&self, width: f32, cx: &mut Context<Self>) -> AnyElement {
+        let t = self.tokens;
+        let location = self
+            .filters
+            .list
+            .and_then(|id| {
+                self.collections.iter().find_map(|collection| match collection {
+                    Collection::List(list) if list.key.id == id => {
+                        Some(list.data.as_str().to_owned())
+                    }
+                    _ => None,
+                })
+            })
+            .unwrap_or_else(|| {
+                if self.filters.list.is_some() {
+                    "選択中のリスト".into()
+                } else {
+                    "プランナー".into()
+                }
+            });
+        div()
+            .h_flex()
+            .h(px(48.))
+            .flex_shrink_0()
+            .px_3()
+            .gap_1()
+            .border_b_1()
+            .border_color(t.border)
+            .bg(t.surface)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .pr_2()
+                    .text_size(px(14.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_ellipsis()
+                    .child(location),
+            )
+            .child(
+                button(t, "previous-day")
+                    .icon(IconName::ChevronLeft)
+                    .h(px(28.))
+                    .w(px(28.))
+                    .accessibility_label("前日")
+                    .tooltip("前日 Alt+PageUp")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.change_day(-1, window, cx)
+                    })),
+            )
+            .child(
+                button(t, "selected-date")
+                    .h(px(28.))
+                    .label(if width >= 1100. {
+                        format!(
+                            "{}年 {}",
+                            self.options.day.ymd().0,
+                            time::date_heading(self.options.day)
+                        )
+                    } else {
+                        time::date_heading(self.options.day)
+                    })
+                    .accessibility_label(format!(
+                        "{} {} 日付を移動",
+                        self.options.day.iso(),
+                        time::date_heading(self.options.day)
+                    ))
+                    .tooltip("日付を移動 Ctrl+D")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_popup(Popup::Date, window, cx)
+                    })),
+            )
+            .child(
+                button(t, "next-day")
+                    .icon(IconName::ChevronRight)
+                    .h(px(28.))
+                    .w(px(28.))
+                    .accessibility_label("翌日")
+                    .tooltip("翌日 Alt+PageDown")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.change_day(1, window, cx)
+                    })),
+            )
+            .child(
+                button(t, "today")
+                    .h(px(28.))
+                    .label("今日")
+                    .tooltip("今日へ戻る Alt+Home")
+                    .disabled(Date::today(&self.options.zone).ok() == Some(self.options.day))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if let Ok(day) = Date::today(&this.options.zone) {
+                            this.navigate(Navigation::Day(day), window, cx);
+                        }
+                    })),
+            )
+            .child(div().mx_2().h(px(16.)).w(px(1.)).bg(t.border))
+            .child(
+                button(t, "add-event")
+                    .icon(IconName::CalendarPlus)
+                    .h(px(28.))
+                    .min_w(px(28.))
+                    .when(width >= 900., |button| button.label("予定"))
+                    .accessibility_label("予定を追加")
+                    .tooltip("予定を追加 Ctrl+Shift+E")
+                    .disabled(self.info.is_none() || self.recovery)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.navigate(Navigation::Event, window, cx)
+                    })),
+            )
+            .into_any_element()
+    }
+
+    fn status_bar(&self, width: f32, cx: &mut Context<Self>) -> AnyElement {
+        let t = self.tokens;
+        let status = self.status.clone();
+        div()
+            .h_flex()
+            .min_h(px(32.))
+            .flex_shrink_0()
+            .px_3()
+            .py_1()
+            .gap_2()
+            .border_t_1()
+            .border_color(t.border)
+            .bg(t.surface)
+            .when(self.error, |d| {
+                d.child(
+                    Icon::new(IconName::CircleAlert)
+                        .with_size(px(14.))
+                        .text_color(t.error_text),
+                )
+            })
+            .child(
+                div()
+                    .id("save-status")
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .text_color(if self.error { t.error_text } else { t.text_secondary })
+                    .when(self.error, |d| d.bg(t.error_background))
+                    .role(Role::Status)
+                    .aria_label(status.clone())
+                    .line_clamp(if self.error { 2 } else { 1 })
+                    .tooltip(move |window, cx| Tooltip::new(status.clone()).build(window, cx))
+                    .child(self.status.clone()),
+            )
+            .when_some(self.saved_task, |d, id| {
+                d.child(
+                    button(t, "open-saved-task")
+                        .h(px(24.))
+                        .icon(IconName::ArrowUpRight)
+                        .when(width >= 900., |button| button.label("タスクを開く"))
+                        .accessibility_label("保存したタスクを開く")
+                        .tooltip("保存したタスクを開く")
+                        .disabled(self.busy)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.navigate(Navigation::Task(id), window, cx)
+                        })),
+                )
+            })
+            .when(self.recovery || self.retryable_write() || self.read_error, |d| {
+                d.child(
+                    button(t, "retry")
+                        .h(px(24.))
+                        .icon(IconName::RefreshCw)
+                        .label(if self.recovery { "保存先を開き直す" } else { "再試行" })
+                        .disabled(self.busy)
+                        .on_click(cx.listener(|this, _, window, cx| this.retry(window, cx))),
+                )
+            })
+            .child(
+                button(t, "undo")
+                    .icon(IconName::Undo2)
+                    .h(px(24.))
+                    .w(px(28.))
+                    .accessibility_label("元に戻す")
+                    .tooltip(
+                        self.history
+                            .undo
+                            .as_ref()
+                            .map(|e| format!("{}を元に戻す Ctrl+Z", operation_name(e.kind)))
+                            .unwrap_or_else(|| "戻せる操作はありません".into()),
+                    )
+                    .disabled(self.history.undo.is_none() || self.busy || self.recovery)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.history_action(false, window, cx)
+                    })),
+            )
+            .child(
+                button(t, "redo")
+                    .icon(IconName::Redo2)
+                    .h(px(24.))
+                    .w(px(28.))
+                    .accessibility_label("やり直す")
+                    .tooltip(
+                        self.history
+                            .redo
+                            .as_ref()
+                            .map(|e| format!("{}をやり直す Ctrl+Shift+Z", operation_name(e.kind)))
+                            .unwrap_or_else(|| "やり直せる操作はありません".into()),
+                    )
+                    .disabled(self.history.redo.is_none() || self.busy || self.recovery)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.history_action(true, window, cx)
+                    })),
+            )
+            .into_any_element()
+    }
+
     fn render_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let popup = self.popup.clone()?;
         let dialog_title = match &popup {
@@ -375,11 +465,12 @@ impl Desktop {
             ))
             .overflow_y_scroll()
             .p_4()
-            .rounded(px(12.))
-            .border_1()
-            .border_color(t.border)
+            .rounded(px(10.))
             .bg(t.surface)
-            .shadow_lg()
+            .when(t.canvas == t.surface_hover, |d| {
+                d.border_1().border_color(t.border)
+            })
+            .when(t.canvas != t.surface_hover, |d| d.shadow_lg())
             .child(
                 div()
                     .text_size(px(16.))
@@ -654,7 +745,7 @@ impl Desktop {
                             t,
                         )
                         .child(
-                            Input::new(&self.date_input)
+                            Styled::h(Input::new(&self.date_input).small(), px(32.))
                                 .aria_label("移動する日付")
                                 .bg(t.surface)
                                 .border_color(t.border)
@@ -671,25 +762,34 @@ impl Desktop {
                 let (year, month, _) = Date::parse(&self.date_input.read(cx).value())
                     .unwrap_or(self.options.day)
                     .ymd();
-                content =
-                    content.child(
-                        div()
-                            .h_flex()
-                            .justify_between()
-                            .child(button(t, "previous-month").label("‹ 前月").on_click(
-                                cx.listener(|this, _, window, cx| {
+                content = content.child(
+                    div()
+                        .h_flex()
+                        .justify_between()
+                        .child(
+                            button(t, "previous-month")
+                                .icon(IconName::ChevronLeft)
+                                .accessibility_label("前月")
+                                .tooltip("前月 PageUp")
+                                .w(px(28.))
+                                .h(px(28.))
+                                .on_click(cx.listener(|this, _, window, cx| {
                                     this.shift_picker_month(-1, window, cx)
-                                }),
-                            ))
-                            .child(format!("{year}年 {month}月"))
-                            .child(
-                                button(t, "next-month")
-                                    .label("翌月 ›")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.shift_picker_month(1, window, cx)
-                                    })),
-                            ),
-                    );
+                                })),
+                        )
+                        .child(format!("{year}年 {month}月"))
+                        .child(
+                            button(t, "next-month")
+                                .icon(IconName::ChevronRight)
+                                .accessibility_label("翌月")
+                                .tooltip("翌月 PageDown")
+                                .w(px(28.))
+                                .h(px(28.))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.shift_picker_month(1, window, cx)
+                                })),
+                        ),
+                );
                 let first_weekday = chrono::NaiveDate::from_ymd_opt(year, month as u32, 1)
                     .map(|date| date.weekday().num_days_from_monday() as i32)
                     .unwrap_or(0);
@@ -725,7 +825,12 @@ impl Desktop {
                                     .when(
                                         Date::parse(&self.date_input.read(cx).value()).ok()
                                             == Some(day),
-                                        |button| button.primary(),
+                                        |button| {
+                                            button
+                                                .selected(true)
+                                                .bg(t.selection_background)
+                                                .text_color(t.selection_text)
+                                        },
                                     )
                                     .w(px(36.))
                                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -743,17 +848,20 @@ impl Desktop {
             Popup::Collections => {
                 for (index, collection) in self.collections.iter().enumerate() {
                     let collection = collection.clone();
-                    let (_, title) = match &collection {
+                    let (icon, title) = match &collection {
                         Collection::List(list) => {
-                            (false, format!("リスト · {}", list.data.as_str()))
+                            (IconName::List, format!("リスト · {}", list.data.as_str()))
                         }
                         Collection::Calendar(cal) => {
-                            (true, format!("カレンダー · {}", cal.data.as_str()))
+                            (IconName::Calendar, format!("カレンダー · {}", cal.data.as_str()))
                         }
                     };
-                    content =
-                        content.child(button(t, ("collection", index)).label(title).on_click(
-                            cx.listener(move |this, _, window, cx| {
+                    content = content.child(
+                        button(t, ("collection", index))
+                            .icon(icon)
+                            .tooltip(title.clone())
+                            .label(title)
+                            .on_click(cx.listener(move |this, _, window, cx| {
                                 this.navigate(
                                     Navigation::Entity(match &collection {
                                         Collection::List(list) => core::EntityId::List(list.key.id),
@@ -764,8 +872,8 @@ impl Desktop {
                                     window,
                                     cx,
                                 )
-                            }),
-                        ));
+                            })),
+                    );
                 }
                 content = content
                     .child(
@@ -774,16 +882,20 @@ impl Desktop {
                             .gap_2()
                             .child(
                                 button(t, "new-list")
-                                    .label("＋ リスト")
+                                    .icon(IconName::Plus)
+                                    .label("リスト")
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.navigate(Navigation::Collection(false), window, cx)
                                     })),
                             )
-                            .child(button(t, "new-calendar").label("＋ カレンダー").on_click(
-                                cx.listener(|this, _, window, cx| {
-                                    this.navigate(Navigation::Collection(true), window, cx)
-                                }),
-                            )),
+                            .child(
+                                button(t, "new-calendar")
+                                    .icon(IconName::Plus)
+                                    .label("カレンダー")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.navigate(Navigation::Collection(true), window, cx)
+                                    })),
+                            ),
                     )
                     .child(
                         div()
@@ -791,6 +903,7 @@ impl Desktop {
                             .gap_2()
                             .child(
                                 button(t, "collections-before")
+                                    .icon(IconName::ChevronLeft)
                                     .label("前へ")
                                     .disabled(self.collections_previous.is_none())
                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -805,6 +918,7 @@ impl Desktop {
                             )
                             .child(
                                 button(t, "collections-after")
+                                    .icon(IconName::ChevronRight)
                                     .label("次へ")
                                     .disabled(self.collections_next.is_none())
                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -881,6 +995,8 @@ impl Desktop {
                     .child("削除すると一覧から取り除かれます。タスクの関連作業枠も削除されます。保存後は元に戻せます。")
                     .child(
                         button(t, "confirm-delete")
+                            .danger()
+                            .icon(IconName::Trash)
                             .label("削除する")
                             .disabled(self.busy)
                             .on_click(cx.listener(move |this, _, window, cx| {

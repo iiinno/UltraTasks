@@ -7,7 +7,7 @@ mod theme;
 mod views;
 mod worker;
 
-use gpui_kit::{assets::Assets, *};
+use gpui_kit::{assets::AllAssets, *};
 use std::{cell::Cell, process::ExitCode, rc::Rc, time::Duration};
 
 fn main() -> ExitCode {
@@ -44,7 +44,7 @@ fn main() -> ExitCode {
     let failure = launch_failed.clone();
     let app_diagnostics = diagnostics.clone();
     gpui_kit::application()
-        .with_assets(Assets)
+        .with_assets(AllAssets)
         .with_quit_mode(QuitMode::LastWindowClosed)
         .run(move |cx| {
             gpui_kit::init(cx);

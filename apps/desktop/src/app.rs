@@ -174,6 +174,7 @@ impl gpui_kit::component::select::SelectItem for CollectionOption {
 #[derive(Clone)]
 pub(crate) enum Navigation {
     Tasks,
+    List(Option<ListId>),
     QuickInput,
     SearchInput,
     Event,
@@ -1679,7 +1680,18 @@ impl Desktop {
             }
             Navigation::Tasks => {
                 self.discard_form();
+                self.compact_agenda = false;
                 self.restore_focus(window, cx);
+            }
+            Navigation::List(list) => {
+                self.compact_agenda = false;
+                if self.filters.list != list {
+                    self.filters.list = list;
+                    self.tasks.held_done.clear();
+                    self.task_epoch += 1;
+                    self.query_tasks(TaskPosition::First, PageMode::Replace, window, cx);
+                }
+                self.list_focus.focus(window, cx);
             }
             Navigation::Day(day) => {
                 if self.options.day != day {

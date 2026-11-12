@@ -1,10 +1,19 @@
 mod agenda;
 mod editor;
+mod sidebar;
 mod task_list;
 mod today;
 
 use crate::theme::Tokens;
-use gpui_kit::{base::FocusableExt, component::button::Button, prelude::*, *};
+use gpui_kit::{
+    base::FocusableExt,
+    component::{
+        Sizable,
+        button::{Button, ButtonVariants},
+    },
+    prelude::*,
+    *,
+};
 
 pub(crate) fn focus_outline(t: Tokens) -> Vec<BoxShadow> {
     vec![
@@ -15,6 +24,9 @@ pub(crate) fn focus_outline(t: Tokens) -> Vec<BoxShadow> {
 
 pub(crate) fn button(t: Tokens, id: impl Into<ElementId>) -> Button {
     Button::new(id)
+        .ghost()
+        .small()
+        .compact()
         .h(px(t.control_height))
         .relative()
         .focus_ring(false)

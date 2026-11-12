@@ -49,7 +49,7 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
         canvas: color(0xfcfcfd, 0x111113),
         surface: color(0xf9f9fb, 0x18191b),
         surface_hover: color(0xf0f0f3, 0x212225),
-        border: color(0xd9d9e0, 0x363a3f),
+        border: color(0xe0e1e6, 0x2e3135),
         text_primary: color(0x1c2024, 0xedeef0),
         text_secondary: color(0x60646c, 0xb0b4ba),
         focus_ring: color(0x0d74ce, 0x70b8ff),
@@ -66,8 +66,8 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
         secondary_size: 12.,
         secondary_line: 18.,
         control_height: 32.,
-        row_height: 64.,
-        long_row_height: 84.,
+        row_height: 44.,
+        long_row_height: 56.,
         control_radius: 6.,
     };
     if let Some(system) = contrast {
@@ -241,7 +241,7 @@ mod tests {
                     assert_eq!([t.error_text, t.warning_text], [system.text; 2]);
                     assert!(ratio(t.text_primary, t.canvas) >= 4.5);
                     assert!(ratio(t.selection_text, t.selection_background) >= 4.5);
-                    assert_eq!(geometry(t), [14., 20., 12., 18., 32., 64., 84., 6.]);
+                    assert_eq!(geometry(t), [14., 20., 12., 18., 32., 44., 56., 6.]);
                 }
             }
         }
@@ -252,6 +252,6 @@ mod tests {
         let light = resolve(ThemeMode::Light, false, None);
         let dark = resolve(ThemeMode::Dark, true, None);
         assert_eq!(geometry(light), geometry(dark));
-        assert_eq!(geometry(light), [14., 20., 12., 18., 32., 64., 84., 6.]);
+        assert_eq!(geometry(light), [14., 20., 12., 18., 32., 44., 56., 6.]);
     }
 }
