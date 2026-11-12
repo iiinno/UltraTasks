@@ -8,7 +8,7 @@ mod views;
 mod worker;
 
 use gpui_kit::{assets::AllAssets, *};
-use std::{cell::Cell, process::ExitCode, rc::Rc, time::Duration};
+use std::{borrow::Cow, cell::Cell, process::ExitCode, rc::Rc, time::Duration};
 
 fn main() -> ExitCode {
     let options = match cli::Options::parse(std::env::args().skip(1)) {
@@ -47,6 +47,18 @@ fn main() -> ExitCode {
         .with_assets(AllAssets)
         .with_quit_mode(QuitMode::LastWindowClosed)
         .run(move |cx| {
+            let fonts: Vec<Cow<'static, [u8]>> = vec![
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Regular.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Medium.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-SemiBold.ttf")),
+                Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Bold.ttf")),
+            ];
+            if let Err(error) = cx.text_system().add_fonts(fonts) {
+                eprintln!("Interフォントを登録できません: {error}");
+                failure.set(true);
+                cx.quit();
+                return;
+            }
             gpui_kit::init(cx);
             app::bind_keys(cx);
             let rendered = Rc::new(Cell::new(false));

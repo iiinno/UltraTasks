@@ -4,15 +4,23 @@ mod motion;
 mod tokens;
 
 pub use motion::{MotionMode, MotionSpec, motion};
-pub use tokens::{SystemColors, Tokens, resolve};
+pub use tokens::{BODY_WEIGHT, CONTROL_WEIGHT, SystemColors, Tokens, resolve};
 
 use std::sync::Arc;
 
 use gpui_kit::{
-    App,
+    App, Font, FontFallbacks,
     component::{Theme, ThemeMode as KitThemeMode, ThemeTokens},
-    px,
+    font, px,
 };
+
+pub fn ui_font() -> Font {
+    Font {
+        fallbacks: Some(FontFallbacks::from_fonts(vec!["Yu Gothic UI".into()])),
+        weight: BODY_WEIGHT,
+        ..font("Inter")
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ThemeMode {
@@ -46,7 +54,7 @@ pub fn apply(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColors>
 }
 
 fn apply_tokens(theme: &mut Theme, t: &Tokens, contrast: Option<&SystemColors>) {
-    theme.font_family = "Yu Gothic UI".into();
+    theme.font_family = ui_font().family;
     theme.font_size = px(t.body_size);
     theme.radius = px(t.control_radius);
     theme.radius_lg = px(12.);
@@ -132,7 +140,7 @@ fn apply_tokens(theme: &mut Theme, t: &Tokens, contrast: Option<&SystemColors>) 
     c.scrollbar = t.canvas;
     c.scrollbar_thumb = t.text_secondary;
     c.scrollbar_thumb_hover = t.text_primary;
-    c.sidebar = t.surface;
+    c.sidebar = t.sidebar;
     c.sidebar_foreground = t.text_secondary;
     c.sidebar_border = t.border;
     c.sidebar_accent = t.surface_hover;
@@ -175,7 +183,9 @@ mod tests {
             assert_eq!(theme.tokens.list_active.color, t.selection_background);
             assert_eq!(theme.button_danger_foreground, t.error_text);
             assert_eq!(theme.button_warning_foreground, t.warning_text);
-            assert_eq!(theme.font_size, px(14.));
+            assert_eq!(theme.font_size, px(13.));
+            assert_eq!(theme.font_family, ui_font().family);
+            assert_eq!(theme.sidebar, t.sidebar);
             assert_eq!(theme.radius, px(6.));
             assert_eq!(
                 theme.highlight_theme.style.editor_background,

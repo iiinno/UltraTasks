@@ -4,7 +4,7 @@ mod sidebar;
 mod task_list;
 mod today;
 
-use crate::theme::Tokens;
+use crate::theme::{CONTROL_WEIGHT, Tokens};
 use gpui_kit::{
     base::FocusableExt,
     component::{
@@ -16,10 +16,7 @@ use gpui_kit::{
 };
 
 pub(crate) fn focus_outline(t: Tokens) -> Vec<BoxShadow> {
-    vec![
-        BoxShadow::new(px(0.), px(0.), t.focus_ring).spread_radius(px(4.)),
-        BoxShadow::new(px(0.), px(0.), t.canvas).spread_radius(px(2.)),
-    ]
+    vec![BoxShadow::new(px(0.), px(0.), t.focus_ring).spread_radius(px(1.))]
 }
 
 pub(crate) fn button(t: Tokens, id: impl Into<ElementId>) -> Button {
@@ -28,9 +25,10 @@ pub(crate) fn button(t: Tokens, id: impl Into<ElementId>) -> Button {
         .small()
         .compact()
         .h(px(t.control_height))
+        .font_weight(CONTROL_WEIGHT)
         .relative()
         .focus_ring(false)
-        .focus(move |s| s.shadow(focus_outline(t)))
+        .focus_visible(move |s| s.shadow(focus_outline(t)))
         .when(t.canvas == t.surface_hover, |button| {
             button.group("desktop-control").child(
                 div()
@@ -70,5 +68,5 @@ pub(crate) fn input_frame(id: EntityId, focus: &FocusHandle, t: Tokens) -> State
         .id(("input-focus", id))
         .track_focus(focus)
         .rounded(px(t.control_radius))
-        .focus(move |s| s.shadow(focus_outline(t)))
+        .focus_visible(move |s| s.shadow(focus_outline(t)))
 }

@@ -1,11 +1,21 @@
 # Third-party assets
 
-実際に取り込んだ素材のみを記録する。正確なcommit SHA、upstreamのファイル、ローカルの配置、変更内容は [`design/upstream-lock.json`](design/upstream-lock.json) に固定する。
+実際に取り込んだ素材のみを記録する。RadixとLucideのcommit SHA、upstreamのファイル、ローカルの配置、変更内容は [`design/upstream-lock.json`](design/upstream-lock.json) に固定する。Interの出典とhashは [`apps/desktop/assets/fonts/source.json`](apps/desktop/assets/fonts/source.json) に記録する。
 
 | Project | Imported material | License notice |
 | --- | --- | --- |
 | [Radix Colors](https://github.com/radix-ui/colors) | Slate / Blue / Jade / Amber / Tomatoのlight・darkの12段階の色。値を変えずJSONへ抽出 | [MIT license](third_party/radix-colors/LICENSE) |
 | [Lucide](https://github.com/lucide-icons/lucide) | 選定した11個のSVGを無変更でコピー | [Full license](third_party/lucide/LICENSE): ISC、Feather由来部分のMIT通知を含む |
+
+## Inter 4.1
+
+[Inter 4.1の公式リリース](https://github.com/rsms/inter/releases/tag/v4.1)はrsms/interのcommit `e3a3d4c57d5ecc01453a575621882a384c1995a3`に対応する。[公式アーカイブ](https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip)のSHA-256は `9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e`。`extras/ttf/`のInter-Regular.ttf、Inter-Medium.ttf、Inter-SemiBold.ttf、Inter-Bold.ttfを無変更で `apps/desktop/assets/fonts/`へコピーした。各ファイルのSHA-256は同ディレクトリの `source.json`に記録した。
+
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)。ライセンスはSIL Open Font License 1.1。アーカイブの `LICENSE.txt`を無変更で [`OFL.txt`](apps/desktop/assets/fonts/OFL.txt) として保持する。配布用にも同じ原文を [`licenses/inter-4.1/LICENSE`](licenses/inter-4.1/LICENSE) に置く。フォントを組み込んだ配布物には、この著作権表示とライセンス原文を添付する。
+
+GPUI 0.3.11のWindows実装は `GetMatchingFonts`でweightに対応するfaceを選び、`CreateFontFace`で読み込む。任意の可変軸を指定する処理を確認できなかったため、静的TrueType版の400・500・600・700を採用した。CSSの本文weight 450は指定として保持するが、静的faceへの対応とWindowsでの見た目は未検証。`TextSystem::add_fonts`で登録し、日本語は `Yu Gothic UI`へfallbackする。Yu Gothic UI自体は同梱しない。
+
+Linearの公開CSSとJavaScriptは値・部品構造の参照に使い、本文を再配布しない。参照URL、hash、実測値と補正した値の区別は [`design/tokens.json`](design/tokens.json) に記録する。
 
 ## Windowsネイティブ実装で追加した依存
 

@@ -1,6 +1,9 @@
-use gpui_kit::{Hsla, rgb};
+use gpui_kit::{FontWeight, Hsla, rgb};
 
 use super::ThemeMode;
+
+pub const BODY_WEIGHT: FontWeight = FontWeight(450.);
+pub const CONTROL_WEIGHT: FontWeight = FontWeight(500.);
 
 /// desktopが高コントラスト有効時に取得したOS色。
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -17,6 +20,7 @@ pub struct SystemColors {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tokens {
     pub canvas: Hsla,
+    pub sidebar: Hsla,
     pub surface: Hsla,
     pub surface_hover: Hsla,
     pub border: Hsla,
@@ -35,6 +39,9 @@ pub struct Tokens {
     pub body_line: f32,
     pub secondary_size: f32,
     pub secondary_line: f32,
+    pub sidebar_width: f32,
+    pub header_height: f32,
+    pub nav_height: f32,
     pub control_height: f32,
     pub row_height: f32,
     pub control_radius: f32,
@@ -45,31 +52,36 @@ pub fn resolve(mode: ThemeMode, system_dark: bool, contrast: Option<&SystemColor
     let color = |light, dark_value| rgb(if dark { dark_value } else { light }).into();
     // design/tokens.jsonの役割とdesign/palettes.jsonのsRGB値。左がlight、右がdark。
     let mut tokens = Tokens {
-        canvas: color(0xfcfcfd, 0x111113),
-        surface: color(0xf9f9fb, 0x18191b),
-        surface_hover: color(0xf0f0f3, 0x212225),
-        border: color(0xe0e1e6, 0x2e3135),
-        text_primary: color(0x1c2024, 0xedeef0),
-        text_secondary: color(0x60646c, 0xb0b4ba),
-        focus_ring: color(0x0d74ce, 0x70b8ff),
-        action_background: color(0x0d74ce, 0x0090ff),
-        action_text: color(0xfcfcfd, 0x111113),
-        selection_background: color(0xe6f4fe, 0x0d2847),
-        selection_text: color(0x113264, 0xc2e6ff),
+        canvas: color(0xf9f9fa, 0x121213),
+        sidebar: color(0xefeff0, 0x09090a),
+        surface: color(0xffffff, 0x121213),
+        surface_hover: color(0xf0f0f3, 0x171718),
+        border: color(0xe2e2e2, 0x212224),
+        text_primary: color(0x1c2024, 0xe2e4e7),
+        text_secondary: color(0x60646c, 0x8a8f98),
+        focus_ring: color(0x60646c, 0x8a8f98),
+        action_background: color(0x1c2024, 0xe2e4e7),
+        action_text: color(0xffffff, 0x121213),
+        selection_background: color(0xe8e8ec, 0x1b1b1c),
+        selection_text: color(0x1c2024, 0xe2e4e7),
         error_background: color(0xfeebe7, 0x391714),
         error_text: color(0x5c271f, 0xff977d),
         warning_background: color(0xfff7c2, 0x302008),
         warning_text: color(0x4f3422, 0xffca16),
-        body_size: 14.,
-        body_line: 20.,
+        body_size: 13.,
+        body_line: 19.5,
         secondary_size: 12.,
         secondary_line: 18.,
-        control_height: 32.,
+        sidebar_width: 244.,
+        header_height: 58.,
+        nav_height: 28.,
+        control_height: 28.,
         row_height: 44.,
         control_radius: 6.,
     };
     if let Some(system) = contrast {
         tokens.canvas = system.canvas;
+        tokens.sidebar = system.canvas;
         tokens.surface = system.canvas;
         // hoverの専用文字色を持たないため背景は保ち、描画側の輪郭で示す。
         tokens.surface_hover = system.canvas;
@@ -112,12 +124,15 @@ mod tests {
         (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
     }
 
-    fn geometry(tokens: Tokens) -> [f32; 7] {
+    fn geometry(tokens: Tokens) -> [f32; 10] {
         [
             tokens.body_size,
             tokens.body_line,
             tokens.secondary_size,
             tokens.secondary_line,
+            tokens.sidebar_width,
+            tokens.header_height,
+            tokens.nav_height,
             tokens.control_height,
             tokens.row_height,
             tokens.control_radius,
@@ -153,6 +168,7 @@ mod tests {
             let mut pairs = Vec::new();
             for (background_name, background) in [
                 ("canvas", t.canvas),
+                ("sidebar", t.sidebar),
                 ("surface", t.surface),
                 ("hover", t.surface_hover),
             ] {
@@ -184,6 +200,7 @@ mod tests {
             }
             for (name, background) in [
                 ("canvas", t.canvas),
+                ("sidebar", t.sidebar),
                 ("surface", t.surface),
                 ("hover", t.surface_hover),
                 ("selection", t.selection_background),
@@ -218,7 +235,10 @@ mod tests {
                 for dark in [false, true] {
                     let t = resolve(mode, dark, Some(&system));
                     assert_eq!(t, expected);
-                    assert_eq!([t.canvas, t.surface, t.surface_hover], [system.canvas; 3]);
+                    assert_eq!(
+                        [t.canvas, t.sidebar, t.surface, t.surface_hover],
+                        [system.canvas; 4]
+                    );
                     assert_eq!([t.text_primary, t.text_secondary], [system.text; 2]);
                     assert_ne!(t.text_secondary, system.disabled_text);
                     assert_eq!(t.border, system.border);
@@ -238,7 +258,10 @@ mod tests {
                     assert_eq!([t.error_text, t.warning_text], [system.text; 2]);
                     assert!(ratio(t.text_primary, t.canvas) >= 4.5);
                     assert!(ratio(t.selection_text, t.selection_background) >= 4.5);
-                    assert_eq!(geometry(t), [14., 20., 12., 18., 32., 44., 6.]);
+                    assert_eq!(
+                        geometry(t),
+                        [13., 19.5, 12., 18., 244., 58., 28., 28., 44., 6.]
+                    );
                 }
             }
         }
@@ -249,6 +272,9 @@ mod tests {
         let light = resolve(ThemeMode::Light, false, None);
         let dark = resolve(ThemeMode::Dark, true, None);
         assert_eq!(geometry(light), geometry(dark));
-        assert_eq!(geometry(light), [14., 20., 12., 18., 32., 44., 6.]);
+        assert_eq!(
+            geometry(light),
+            [13., 19.5, 12., 18., 244., 58., 28., 28., 44., 6.]
+        );
     }
 }
