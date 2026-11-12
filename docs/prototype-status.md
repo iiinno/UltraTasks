@@ -4,16 +4,16 @@
 
 ## 配布版と起動
 
-- 検証したsource: `7935d2dcc334c31576e81773cb724d4add277142`。
-- [Windows CI run 43111292958](https://github.com/iiinno/UltraTasks/actions/runs/43111292958)、attempt 1、`completed / success`。full検証・package・配布upload・spread/dense測定・証拠uploadが成功。依存cache保存はskipped、release build cacheは保存成功。
-- artifact: `windows-release-7935d2dcc334c31576e81773cb724d4add277142-1`。
+- 検証したsource: `05c8fc2f4c3ce9a5cbbb7ce7accff03a791f4777`。
+- [Windows CI run 43127481310](https://github.com/iiinno/UltraTasks/actions/runs/43127481310)、attempt 1、`completed / success`。full検証・package・配布upload・spread/dense測定・証拠uploadが成功。
+- artifact: `windows-release-05c8fc2f4c3ce9a5cbbb7ce7accff03a791f4777-1`。
 - リポジトリは公開済み。実装は[`prototype/pc-first`](https://github.com/iiinno/UltraTasks/tree/prototype/pc-first)にあり、mainへのマージはしていない。
 
 取得したartifact内の `Start-UltraTasks.cmd` で同梱exeを起動する。Rust、元checkout、ローカルビルドは不要。DBの既定は `%LOCALAPPDATA%\UltraTasks\demo\demo.sqlite`。新規保存先では空のDBから始まり、既存DBはそのまま開く。常に `--demo none` を使い、fixtureを生成しない。表示日は `Asia/Tokyo` の今日。取得・選択方法は[開発手順](development.md#成果物を取得する)を参照する。
 
-今回ワークスペースへ取得した版は `out/ultratasks/downloads/release-43111292958-preview/app/` にある。APIの実行元・source・検証step、ZIP digest、全44ファイルのhashを確認済み。ZIPのSHA-256は `f31b46c21ac429ab0fe3cc3f5429c10c6527f8f9e98aaa4464a98ed3573fbe4d`。この先行取得ではAppDataの `current.json` を変更していないため、同フォルダー内の起動入口を使う。GitHubのartifact保持期間は14日であり、恒久的なGitHub Releaseではない。
+今回ワークスペースへ取得した版は `out/ultratasks/downloads/release-43127481310-b611dgav/app/` にある。APIの実行元・source・検証step、ZIP digest、全44ファイルのhashを確認済み。ZIPは33,341,355 bytes、SHA-256は `f5138457895d5e8cb68ad645e312d6f55b8869bf749ec2f088cc275a66c2d742`。この先行取得ではAppDataの `current.json` を変更していないため、同フォルダー内の起動入口を使う。GitHubのartifact保持期間は14日であり、恒久的なGitHub Releaseではない。
 
-配布後の追補として、Windows PowerShell 5.1で起動設定の確認 `-WhatIf` だけが失敗する問題をソース側の `scripts/start-demo.ps1` で修正した。読取streamからhashを計算し、WhatIfに抑制される内部のpath処理を通さない。実配布exeのpreviewと正常な合成入力は終了0、改ざん入力はpreview/通常経路とも終了1で拒否し、DB・ログ・アプリの生成がないことを軽量検査した。証拠は `out/ultratasks/evidence/whatif-launcher-fix-20261112/`。配布済みbundleのファイルは変更しておらず、その同梱launcherで `-WhatIf` を使う場合は既知の制限が残る。通常起動は終了コード0まで確認済み。この追補はRust本体を変更せず、上記のCI・性能値は引き続きsource `7935d2d` のものとして扱う。
+Windows PowerShell 5.1の `-WhatIf` によるhash取得失敗の修正も、このbundleに含まれる。同梱 `Start-UltraTasks.cmd -WhatIf` は終了0で、source、既定保存先、Asia/Tokyo、今日、demo noneを確認した。従来の改ざん拒否と副作用なしの軽量検査は `out/ultratasks/evidence/whatif-launcher-fix-20261112/` にある。
 
 ## 統合した実装
 
@@ -26,34 +26,40 @@
 | 表示 | light/dark/system、OS高コントラスト、system/reduced/noneの動き設定、入力面、focus輪郭。設定はDB横へ保存 |
 | 検証器 | 公開APIの独立受入、remote合成fixture、core計測、Windowsプロセス観測、元sampleの統計集計 |
 
+UIはLinearの製品画面とRadix/Geistの部品規約を参考に再構成した。192pxのsidebarは狭幅で52pxのrailになり、360pxのTask/Editorと時間軸を並べる。検索・追加・履歴をコンパクトな操作帯へ整理し、行は最小44pxから内容に応じて伸びる。GPUI KitとLucideを利用し、未保存のリスト移動は既存guardへ接続した。リスト変更時の非表示選択の解除、選択状態のアクセシビリティ通知、scrollbarのコントラストも修正した。実装値は[DESIGN.md](../DESIGN.md)、出典と権利の範囲は[UI参照調査](ui-reference-study.md)を参照する。
+
 保存ファイルのhardlink別名による二重openはSQLite接続前に拒否する。Unicode時刻入力のpanic、破棄した保存要求と別フォームの混同、保存後の古い親Task版、密集予定の占有範囲、短い作業枠と時刻ラベルの見切れを修正した。入力エラーは入力付近の日本語表示にした。依存はrusqlite 0.41.0 / libsqlite3-sys 0.39.1 / SQLite 3.54.1へ更新し、progress handlerの登録・解除失敗も扱う。[公開前の確認](security-review.md)に監査範囲と限界を記録している。
 
 ## リモート検証
 
-GitHub-hosted `windows-2025`、Rust 1.99.1/MSVC、releaseでfmt、Clippy、全targetのテスト、製品/計測exeのbuild、依存検査を通過した。Rustのテスト結果は **101成功・0失敗・2 ignored**。ignoredの2件は親テストが環境とDBを準備して別プロセスで呼ぶ専用入口であり、通常の一括列挙では直接実行しない。
+GitHub-hosted `windows-2025`、Rust 1.99.1/MSVC、releaseでfmt、Clippy、全targetのテスト、製品/計測exeのbuild、依存検査を通過した。Rustのテスト結果は **102成功・0失敗・2 ignored**。ignoredの2件は親テストが環境とDBを準備して別プロセスで呼ぶ専用入口であり、通常の一括列挙では直接実行しない。
 
 CIのnative smokeは `NOT_RUN`。以下の手動回帰と区別する。開発PCでRustビルド・check・test・Clippy・bench、fixture生成、重い計測は実行しない。検証済み成果物の起動と少数操作だけを行う。
 
 ## 配布版の実画面確認
 
-source `7935d2d` の配布exeを、専用の空DBから起動して確認した。
+source `05c8fc2` の配布exeを、専用の空DBから起動して確認した。
 
-- 日本語Taskの追加とローカル保存。
-- 開始時刻「あ」でクラッシュせず、入力を保持して日本語エラーを表示。
-- 「9時」を保存して09:00–09:30の作業枠を表示。30分枠の一行タイトルと09:00ラベルが見切れないことを確認。
-- 完了後も作業枠を保持し、Undoで未完了へ復帰。
-- 通常終了と再起動後にTask・作業時間・履歴を復元。再起動後のRedo/Undoも確認。
-- `--window-size 900x720` で一覧と時刻編集を確認。日付/時刻欄、保存操作、右の時間割が収まることを確認。
-- 同梱 `Start-UltraTasks.cmd` からも同じ専用DBを正常起動し、Taskと作業枠の復元を確認。
-- 確認用アプリはすべて通常終了し、対象プロセスが消えたことを確認。
+- 日本語Taskを4件追加して保存。長いタイトルの2行表示と補助情報が重ならないことを目視。
+- 開始時刻「あ」で入力を保持して日本語エラーを表示し、「9時」に修正して09:00–09:30の作業枠を保存。30分の高さと一行表示を確認。
+- 日本語検索で1行へ絞り、解除で4行へ復帰。
+- リスト「仕事」を作成。編集中のリスト移動で確認を表示し、移動の取消で下書きを保持。「保存して移動」でタイトル更新と移動を確認。
+- 空の移動先リストへfocusした後のEnterで、前リストの非表示Taskを開かないことを確認。
+- Taskの完了後も作業枠を保持し、Undoで未完了へ復帰。
+- 独立Event「デザインレビュー」を10:00–10:30に保存。予定と作業枠を別iconで表示。
+- `1280x800` と `900x720`、dark/light、動きを減らす設定を確認。900幅でも日付・時刻欄、保存操作、右の時間割が収まった。
+- 通常終了後の再起動でTask・予定・作業枠・リスト・light設定を復元。再起動後のUndo/Redoで予定を取り消し・復元。
+- 確認用アプリはすべて通常終了し、対象がアプリ一覧から消えたことを確認。
 
-記録はワークスペース直下 `out/ultratasks/evidence/gui-verified-7935/interaction-review-final.md`。日本語の値設定はIME変換中の確認ではなく、900指定の一画面は全DPIの検証ではない。
+記録はワークスペース直下 `out/ultratasks/ui-redesign/evidence/gui-05c8fc2/interaction-review.md`。CIの最終API・summary・test stdoutは `out/ultratasks/ui-redesign/evidence/run43127481310-final-r8h3njop/`。主担当がComputer Useの実画像とAX treeで確認し、別担当は静的レビューの4指摘を修正後に再確認した。独立した画像レビューを実施したという意味ではない。
 
-初期統合版では、Task編集、同一Taskへの二枠、日本語検索、light/dark切替、独立した終日Eventも確認した。記録は `out/ultratasks/evidence/gui-initial/interaction-review.md` と `persisted-result.json`。今回の配布版で全操作を再実行したという意味ではない。
+日本語の値設定はIME変換中の確認ではなく、2つの指定幅は全DPIの検証ではない。初期版で確認した同一Taskへの二枠、終日Event等の記録は `out/ultratasks/evidence/gui-initial/` に保持するが、今回の配布版で全経路を再実行したとは扱わない。
 
-## 性能と残る確認
+## UI改修前のcore基準測定と残る確認
 
-配布版と同じrun `43111292958` で、GitHub-hosted Windows runner上のcore本測定を完了した。1千/1万Task、spread/dense、10操作の40条件。各条件5試行×1000回、計200,000回がすべて成功・検査済みで、failure、timeout、deadline超過、未実行、処理時間の欠測は0。別途20,000回のwarmupは統計から除外した。
+最新runでもspread/denseの計測stepは成功したが、今回のUI改修ではその数値の比較分析を行っていない。以下はUI改修前のsource `7935d2dcc334c31576e81773cb724d4add277142`、run `43111292958` の基準値であり、新しい画面の性能値ではない。
+
+そのrunでGitHub-hosted Windows runner上のcore本測定を完了した。1千/1万Task、spread/dense、10操作の40条件。各条件5試行×1000回、計200,000回がすべて成功・検査済みで、failure、timeout、deadline超過、未実行、処理時間の欠測は0。別途20,000回のwarmupは統計から除外した。
 
 1万Taskでの処理時間p95（ms、5試行合算、失敗・外れ値を除外しない母集団）は次のとおり。
 
@@ -78,6 +84,6 @@ source `7935d2d` の配布exeを、専用の空DBから起動して確認した�
 
 [計測方法](performance-method.md)に処理時間の範囲、統計、fixture、未観測項目を記載している。Storeの同期呼出しを測り、検索は3条件の混合、取得は先頭最大200件とCOUNT、更新は同じTaskへの反復。fixture生成・呼出し後の正当性検査・後片付け・ログ書込みは計時外。queue waitと画面提示は200,000回すべて未観測であり、0msとして扱わない。
 
-IME確定と送信、貼付、全キーボード経路、ドラッグ取消、DPI/文字拡大、Narrator、1千/1万件の実GUIでの入力・スクロール・起動・アイドルは残る確認。coreの処理時間はUIの画面提示やユーザーPCの性能ではない。120Hzや世界最速を達成したとは主張しない。
+IME確定と送信、貼付、全キーボード経路、ドラッグ取消、780px未満のcompact切替、DPI/文字拡大、Narrator、1千/1万件の実GUIでの入力・スクロール・起動・アイドルは残る確認。coreの処理時間はUIの画面提示やユーザーPCの性能ではない。120Hzや世界最速を達成したとは主張しない。
 
 同期、通知、繰り返し、入出力、外部連携、AI/MCPは今回の実装範囲に含めない。
