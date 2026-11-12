@@ -43,7 +43,6 @@ impl Settings {
         let reduced = motion.fade_ms == 0 && motion.move_ms == 0;
         cx.set_reduce_motion(reduced);
         Theme::update(cx, |theme| {
-            theme.font_family = "Yu Gothic UI".into();
             theme.focus_ring = false;
             theme.motion = Default::default();
             theme.cursor_blink = if reduced {

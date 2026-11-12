@@ -2,7 +2,7 @@ use crate::app::*;
 use crate::diagnostics::micros;
 use gpui_kit::{
     assets::IconName,
-    component::{Icon, Selectable, Sizable, radio::RadioGroup, tooltip::Tooltip},
+    component::{Icon, Selectable, Sizable, button::Button, popover::Popover, radio::RadioGroup, tooltip::Tooltip},
 };
 use std::time::Instant as Clock;
 
@@ -38,41 +38,39 @@ impl Render for Desktop {
         }
         let t = self.tokens;
         let width = f32::from(window.viewport_size().width);
-        let rail = width < 1000.;
-        let compact = width < 780.;
-        let mut columns = div().h_flex().items_stretch().flex_1().min_w_0().min_h_0();
-        if !compact || !self.compact_agenda {
-            let left = if self.form.is_some() {
-                self.editor_panel(window, cx)
-            } else {
-                self.task_panel(window, cx)
-            };
-            columns = columns.child(
-                div()
-                    .v_flex()
-                    .w(px(360.))
-                    .flex_shrink_0()
-                    .min_w_0()
-                    .min_h_0()
-                    .when(compact, |d| d.w_full())
-                    .when(!compact, |d| d.border_r_1().border_color(t.border))
-                    .child(left),
-            );
-        }
-        if !compact || self.compact_agenda {
-            columns = columns.child(
-                div()
-                    .v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .min_h_0()
-                    .child(self.agenda_panel(window, cx)),
-            );
-        }
+        let rail = width < 900.;
+        let compact = width < 900.;
+        let editing = self.form.is_some();
+        let content = if editing {
+            self.editor_panel(window, cx)
+        } else if self.calendar_view {
+            let mut planner = div().h_flex().items_stretch().size_full().min_h_0();
+            if !compact || !self.compact_agenda {
+                planner = planner.child(
+                    div()
+                        .v_flex()
+                        .w(px(280.))
+                        .min_w_0()
+                        .min_h_0()
+                        .flex_shrink_0()
+                        .when(compact, |d| d.w_full().flex_1())
+                        .when(!compact, |d| d.border_r_1().border_color(t.border))
+                        .child(self.task_panel(window, cx)),
+                );
+            }
+            if !compact || self.compact_agenda {
+                planner = planner.child(
+                    div().v_flex().flex_1().min_w_0().min_h_0()
+                        .child(self.agenda_panel(window, cx)),
+                );
+            }
+            planner.into_any_element()
+        } else {
+            self.task_panel(window, cx)
+        };
         let sidebar = self.sidebar(rail, cx);
         let toolbar = self.location_bar(width, cx);
         let status = self.status_bar(width, cx);
-        let popup = self.render_popup(window, cx);
         let root = div()
             .id("ultratasks")
             .key_context("UltraTasks")
@@ -80,9 +78,9 @@ impl Render for Desktop {
             .size_full()
             .v_flex()
             .relative()
-            .bg(t.canvas)
+            .bg(t.sidebar)
             .text_color(t.text_primary)
-            .font_family("Yu Gothic UI")
+            .font(crate::theme::ui_font())
             .text_size(px(t.body_size))
             .line_height(px(t.body_line))
             .on_action(cx.listener(|this, _: &NewTask, window, cx| {
@@ -162,8 +160,15 @@ impl Render for Desktop {
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
-                            .child(toolbar)
-                            .when(compact, |d| {
+                            .my(px(8.))
+                            .mr(px(8.))
+                            .rounded(px(12.))
+                            .border_1()
+                            .border_color(t.border)
+                            .bg(t.canvas)
+                            .overflow_hidden()
+                            .when(!editing, |d| d.child(toolbar))
+                            .when(compact && self.calendar_view && !editing, |d| {
                                 d.child(
                                     div()
                                         .h_flex()
@@ -213,11 +218,10 @@ impl Render for Desktop {
                                         ),
                                 )
                             })
-                            .child(columns)
+                            .child(div().flex_1().min_w_0().min_h_0().child(content))
                             .child(status),
                     ),
-            )
-            .when_some(popup, |d, popup| d.child(popup));
+            );
         self.diagnostics.sample(
             "render_callback_cpu",
             0,
@@ -247,29 +251,29 @@ impl Desktop {
                 if self.filters.list.is_some() {
                     "選択中のリスト".into()
                 } else {
-                    "プランナー".into()
+                    "タスク".into()
                 }
             });
         div()
             .h_flex()
-            .h(px(48.))
+            .h(px(t.header_height))
             .flex_shrink_0()
-            .px_3()
-            .gap_1()
+            .px(px(8.))
+            .gap(px(8.))
             .border_b_1()
             .border_color(t.border)
-            .bg(t.surface)
+            .bg(t.canvas)
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .pr_2()
                     .text_size(px(14.))
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .font_weight(FontWeight::MEDIUM)
                     .text_ellipsis()
-                    .child(location),
+                    .child(if self.calendar_view { "時間割".to_owned() } else { location }),
             )
-            .child(
+            .when(self.calendar_view, |d| d.child(
                 button(t, "previous-day")
                     .icon(IconName::ChevronLeft)
                     .h(px(28.))
@@ -278,28 +282,16 @@ impl Desktop {
                     .tooltip("前日 Alt+PageUp")
                     .on_click(cx.listener(|this, _, window, cx| this.change_day(-1, window, cx))),
             )
-            .child(
+            .child(self.popup_trigger(
+                "date-popover",
                 button(t, "selected-date")
                     .h(px(28.))
-                    .label(if width >= 1100. {
-                        format!(
-                            "{}年 {}",
-                            self.options.day.ymd().0,
-                            time::date_heading(self.options.day)
-                        )
-                    } else {
-                        time::date_heading(self.options.day)
-                    })
-                    .accessibility_label(format!(
-                        "{} {} 日付を移動",
-                        self.options.day.iso(),
-                        time::date_heading(self.options.day)
-                    ))
-                    .tooltip("日付を移動 Ctrl+D")
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.open_popup(Popup::Date, window, cx)),
-                    ),
-            )
+                    .label(time::date_heading(self.options.day))
+                    .accessibility_label(format!("{} 日付を移動", self.options.day.iso()))
+                    .tooltip("日付を移動 Ctrl+D"),
+                Popup::Date,
+                cx,
+            ))
             .child(
                 button(t, "next-day")
                     .icon(IconName::ChevronRight)
@@ -334,7 +326,74 @@ impl Desktop {
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.navigate(Navigation::Event, window, cx)
                     })),
-            )
+            ))
+            .when(!self.calendar_view, |d| d
+                .child(button(t, "header-search")
+                    .icon(IconName::Search).h(px(28.)).w(px(28.))
+                    .accessibility_label("タスクを検索").tooltip("タスクを検索 Ctrl+K")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.navigate(Navigation::SearchInput, window, cx)
+                    })))
+                .child(button(t, "header-new-task")
+                    .icon(IconName::Plus).h(px(28.)).label("新規タスク")
+                    .disabled(self.info.is_none() || self.recovery)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.navigate(Navigation::QuickInput, window, cx)
+                    }))))
+            .into_any_element()
+    }
+
+    pub(crate) fn filter_trigger(&self, cx: &mut Context<Self>) -> AnyElement {
+        let count = usize::from(self.filters.list.is_some())
+            + usize::from(self.filters.status != StatusFilter::Open)
+            + usize::from(self.filters.due != 0)
+            + usize::from(self.filters.blocks != BlockFilter::Any);
+        self.popup_trigger(
+            "filters-popover",
+            button(self.tokens, "filters")
+                .h(px(28.))
+                .icon(IconName::ListFilter)
+                .label(if count == 0 { "絞り込み".to_owned() } else { format!("絞り込み {count}") })
+                .selected(count > 0),
+            Popup::Filters(self.filters.clone()),
+            cx,
+        )
+    }
+
+    fn popup_trigger(
+        &self,
+        id: &'static str,
+        trigger: Button,
+        popup: Popup,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let kind = std::mem::discriminant(&popup);
+        let is_open = self.popup.as_ref().is_some_and(|current| {
+            std::mem::discriminant(current) == kind
+        }) && !self.dialog_open;
+        let width = if matches!(popup, Popup::Date) { 344. } else { 384. };
+        let weak = cx.weak_entity();
+        Popover::new(id)
+            .trigger(trigger)
+            .anchor(Anchor::TopLeft)
+            .offset(px(6.))
+            .w(px(width))
+            .max_w(px(400.))
+            .open(is_open)
+            .track_focus(&self.popup_focus)
+            .on_open_change(cx.listener(move |this, open, window, cx| {
+                if *open {
+                    this.open_popup(popup.clone(), window, cx);
+                } else if this.popup.as_ref().is_some_and(|current| {
+                    std::mem::discriminant(current) == kind
+                }) {
+                    this.dismiss_popup(window, cx);
+                }
+            }))
+            .content(move |_, window, cx| {
+                weak.update(cx, |this, cx| this.popup_content(window, cx))
+                    .ok().flatten().unwrap_or_else(|| div().into_any_element())
+            })
             .into_any_element()
     }
 
@@ -343,10 +402,9 @@ impl Desktop {
         let status = self.status.clone();
         div()
             .h_flex()
-            .min_h(px(32.))
+            .min_h(px(28.))
             .flex_shrink_0()
             .px_3()
-            .py_1()
             .gap_2()
             .border_t_1()
             .border_color(t.border)
@@ -447,9 +505,10 @@ impl Desktop {
             .into_any_element()
     }
 
-    fn render_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(crate) fn popup_content(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let popup = self.popup.clone()?;
         let dialog_title = match &popup {
+            Popup::QuickTask => "新規タスク",
             Popup::Filters(_) => "タスクの絞り込み",
             Popup::Settings(_) => "表示設定",
             Popup::Date => "日付を移動",
@@ -463,18 +522,24 @@ impl Desktop {
             .id("popup")
             .v_flex()
             .gap_3()
-            .w(px(340.))
+            .w_full()
+            .min_w_0()
+            .font(crate::theme::ui_font())
+            .text_size(px(13.))
+            .text_color(t.text_primary)
+            .key_context("UltraTasks")
+            .role(Role::Group)
+            .aria_label(dialog_title)
+            .on_action(cx.listener(|this, _: &Cancel, window, cx| this.cancel(window, cx)))
+            .on_action(cx.listener(|this, _: &SaveEditor, window, cx| this.save_from_keyboard(window, cx)))
+            .on_key_up(cx.listener(|this, _, _, _| {
+                this.quick_ready = true;
+                this.date_ready = true;
+            }))
             .max_h(px(
-                (f32::from(window.viewport_size().height) - 80.).clamp(160., 600.)
+                (f32::from(window.viewport_size().height) - 120.).clamp(160., 600.)
             ))
             .overflow_y_scroll()
-            .p_4()
-            .rounded(px(10.))
-            .bg(t.surface)
-            .when(t.canvas == t.surface_hover, |d| {
-                d.border_1().border_color(t.border)
-            })
-            .when(t.canvas != t.surface_hover, |d| d.shadow_lg())
             .child(
                 div()
                     .text_size(px(16.))
@@ -483,6 +548,9 @@ impl Desktop {
                     .child(dialog_title),
             );
         match popup {
+            Popup::QuickTask => {
+                content = content.child(self.quick_task_content(window, cx));
+            }
             Popup::Filters(filters) => {
                 content = content
                     .child(
@@ -603,7 +671,7 @@ impl Desktop {
                             .gap_2()
                             .child(button(t, "reset-filters").label("リセット").on_click(
                                 cx.listener(|this, _, window, cx| {
-                                    this.popup = None;
+                                    this.clear_popup(window, cx);
                                     this.apply_filters(Filters::default(), window, cx);
                                     this.restore_focus(window, cx);
                                 }),
@@ -934,9 +1002,9 @@ impl Desktop {
                         content = content.child(
                             button(t, "wait-close")
                                 .label("保存完了を待って終了")
-                                .on_click(cx.listener(|this, _, _, cx| {
+                                .on_click(cx.listener(|this, _, window, cx| {
                                     this.quit_after_save = true;
-                                    this.popup = None;
+                                    this.clear_popup(window, cx);
                                     cx.notify();
                                 })),
                         );
@@ -954,7 +1022,7 @@ impl Desktop {
                                 })
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.after_save = Some(after.clone());
-                                    this.popup = None;
+                                    this.clear_popup(window, cx);
                                     if this.form.is_some() {
                                         this.save_form(window, cx);
                                     } else {
@@ -989,7 +1057,7 @@ impl Desktop {
                             .label("削除する")
                             .disabled(self.busy)
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                this.popup = None;
+                                this.clear_popup(window, cx);
                                 let origin = this
                                     .form
                                     .as_ref()
@@ -1014,26 +1082,6 @@ impl Desktop {
                     this.dismiss_popup(window, cx);
                 })),
         );
-        Some(
-            div()
-                .id("popup-overlay")
-                .absolute()
-                .inset_0()
-                .bg(gpui_kit::rgba(0x00000030))
-                .flex()
-                .justify_end()
-                .items_start()
-                .pt(px(64.))
-                .pr_4()
-                .occlude()
-                .child(
-                    content
-                        .tab_group()
-                        .role(Role::Dialog)
-                        .aria_label(dialog_title)
-                        .focus_trap("desktop-popup", &self.popup_focus),
-                )
-                .into_any_element(),
-        )
+        Some(content.into_any_element())
     }
 }

@@ -16,9 +16,8 @@ pub(crate) use crate::{
 };
 pub(crate) use gpui_kit::{
     Entity,
-    base::FocusTrapElement,
     component::{
-        Disableable, StyledExt,
+        Disableable, StyledExt, WindowExt,
         button::ButtonVariants,
         input::{Input, InputEvent, InputState, Textarea, TextareaState},
     },
@@ -175,6 +174,7 @@ impl gpui_kit::component::select::SelectItem for CollectionOption {
 #[derive(Clone)]
 pub(crate) enum Navigation {
     Tasks,
+    Calendar,
     List(Option<ListId>),
     QuickInput,
     SearchInput,
@@ -196,6 +196,7 @@ impl Navigation {
 }
 #[derive(Clone)]
 pub(crate) enum Popup {
+    QuickTask,
     Filters(Filters),
     Settings(Settings),
     Date,
@@ -337,7 +338,9 @@ pub struct Desktop {
     pub(crate) list_focus: FocusHandle,
     pub(crate) popup_focus: FocusHandle,
     pub(crate) return_focus: Option<FocusHandle>,
-    pub(crate) popup_return_focus: Option<FocusHandle>,
+    pub(crate) dialog_open: bool,
+    pub(crate) calendar_view: bool,
+    pub(crate) search_open: bool,
     pub(crate) quick: Entity<InputState>,
     pub(crate) search: Entity<InputState>,
     pub(crate) date_input: Entity<InputState>,
@@ -450,7 +453,9 @@ impl Desktop {
             list_focus,
             popup_focus: cx.focus_handle(),
             return_focus: None,
-            popup_return_focus: None,
+            dialog_open: false,
+            calendar_view: false,
+            search_open: false,
             quick,
             search,
             date_input,
@@ -595,7 +600,7 @@ impl Desktop {
                     let candidate = this.form.as_ref().is_some_and(|form| form.drag_candidate);
                     if candidate {
                         this.discard_form();
-                        this.popup = None;
+                        this.clear_popup(window, cx);
                         this.restore_focus(window, cx);
                     }
                     if had_drag || candidate {
@@ -1140,7 +1145,7 @@ impl Desktop {
                 let (t, motion) = self.settings.apply(cx);
                 self.tokens = t;
                 self.motion = motion;
-                self.popup = None;
+                self.clear_popup(window, cx);
                 self.status = "表示設定を保存しました".into();
                 self.restore_focus(window, cx);
             }
@@ -1636,8 +1641,10 @@ impl Desktop {
                         self.quick_validation = None;
                         self.quick.update(cx, |input, cx| {
                             input.set_value("", window, cx);
-                            input.focus(window, cx);
                         });
+                        if matches!(self.popup, Some(Popup::QuickTask)) {
+                            self.dismiss_popup(window, cx);
+                        }
                     }
                 }
                 WriteOrigin::Form { stamp } => {
@@ -1739,28 +1746,34 @@ impl Desktop {
         if !nav.is_available(&self.tasks) {
             return;
         }
-        self.popup = None;
+        self.clear_popup(window, cx);
         self.drag = None;
         self.selection_epoch += 1;
         self.clear_read_error(ReadScope::Selection);
         self.discard_form();
         match nav {
             Navigation::QuickInput => {
-                self.discard_form();
-                self.compact_agenda = false;
+                self.open_popup(Popup::QuickTask, window, cx);
                 self.quick.update(cx, |input, cx| input.focus(window, cx));
             }
             Navigation::SearchInput => {
-                self.discard_form();
+                self.calendar_view = false;
+                self.search_open = true;
                 self.compact_agenda = false;
                 self.search.update(cx, |input, cx| input.focus(window, cx));
             }
             Navigation::Tasks => {
-                self.discard_form();
+                self.calendar_view = false;
                 self.compact_agenda = false;
                 self.restore_focus(window, cx);
             }
+            Navigation::Calendar => {
+                self.calendar_view = true;
+                self.compact_agenda = true;
+                self.focus.focus(window, cx);
+            }
             Navigation::List(list) => {
+                self.calendar_view = false;
                 self.compact_agenda = false;
                 self.apply_filters(
                     Filters {
@@ -2087,20 +2100,56 @@ impl Desktop {
             .focus(window, cx);
     }
     pub(crate) fn open_popup(&mut self, popup: Popup, window: &mut Window, cx: &mut Context<Self>) {
-        self.popup_return_focus = window.focused(cx);
+        self.clear_popup(window, cx);
+        let anchored = matches!(popup, Popup::Filters(_))
+            || matches!(popup, Popup::Date) && self.calendar_view && self.form.is_none();
         self.popup = Some(popup);
-        self.popup_focus.focus(window, cx);
+        if !anchored {
+            self.dialog_open = true;
+            let weak = cx.weak_entity();
+            window.open_dialog(cx, move |dialog, window, cx| {
+                let current = weak.update(cx, |this, cx| {
+                    (this.popup_content(window, cx), matches!(this.popup, Some(Popup::QuickTask)))
+                }).ok();
+                let (content, quick) = current.unwrap_or((None, false));
+                let cancel = weak.clone();
+                let closed = weak.clone();
+                dialog
+                    .centered()
+                    .w(px(if quick { 750. } else { 400. }))
+                    .rounded(px(if quick { 21. } else { 12. }))
+                    .font(crate::theme::ui_font())
+                    .overlay_closable(false)
+                    .entrance(gpui_kit::component::dialog::DialogEntrance::None)
+                    .on_ok(|_, _, _| false)
+                    .on_cancel(move |_, window, cx| {
+                        cancel.update(cx, |this, cx| !this.composing(window, cx)).unwrap_or(true)
+                    })
+                    .on_close(move |_, _, cx| {
+                        let _ = closed.update(cx, |this, cx| {
+                            this.popup = None;
+                            this.dialog_open = false;
+                            this.date_validation = None;
+                            cx.notify();
+                        });
+                    })
+                    .children(content)
+            });
+        }
         cx.notify();
+    }
+    pub(crate) fn clear_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.popup = None;
+        if self.dialog_open {
+            self.dialog_open = false;
+            window.close_dialog(cx);
+        }
     }
     pub(crate) fn dismiss_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.popup, Some(Popup::Date)) {
             self.date_validation = None;
         }
-        self.popup = None;
-        self.popup_return_focus
-            .take()
-            .unwrap_or_else(|| self.focus.clone())
-            .focus(window, cx);
+        self.clear_popup(window, cx);
         cx.notify();
     }
     pub(crate) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2117,7 +2166,8 @@ impl Desktop {
             self.status = "仮配置を取り消しました".into();
             self.restore_focus(window, cx);
         } else if self.form.is_some() {
-            self.navigate(Navigation::Tasks, window, cx);
+            let destination = if self.calendar_view { Navigation::Calendar } else { Navigation::Tasks };
+            self.navigate(destination, window, cx);
         } else {
             self.list_focus.focus(window, cx);
         }
