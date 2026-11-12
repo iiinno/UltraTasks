@@ -257,7 +257,8 @@ impl Desktop {
                                             d.child(
                                                 button(t, "empty-add-task")
                                                     .primary()
-                                                    .h(px(32.))
+                                                    .h(px(28.))
+                                                    .rounded(px(9999.))
                                                     .px(px(12.))
                                                     .icon(IconName::Plus)
                                                     .label("タスクを作成")
@@ -442,7 +443,7 @@ impl Desktop {
                         div()
                             .flex_shrink_0()
                             .text_size(px(13.))
-                            .text_color(t.text_secondary)
+                            .text_color(t.text_primary)
                             .child("新規タスク"),
                     ),
             )
@@ -463,12 +464,11 @@ impl Desktop {
                     .h_flex()
                     .justify_end()
                     .p(px(12.))
-                    .border_t_1()
-                    .border_color(t.border)
                     .child(
                         button(t, "add-task")
                             .primary()
-                            .h(px(32.))
+                            .h(px(28.))
+                            .rounded(px(9999.))
                             .px(px(12.))
                             .label("タスクを作成")
                             .accessibility_label("タスクを作成")

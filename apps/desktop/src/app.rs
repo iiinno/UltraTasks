@@ -2138,7 +2138,7 @@ impl Desktop {
                     current.unwrap_or((None, false, transparent_black()));
                 let cancel = weak.clone();
                 let closed = weak.clone();
-                let top = f32::from(window.viewport_size().height) * 0.13;
+                let top = 42. + f32::from(window.viewport_size().height) * 0.13;
                 dialog
                     .when(!quick, |dialog| dialog.centered())
                     .when(quick, |dialog| dialog.margin_top(px(top)).p(px(1.)))
