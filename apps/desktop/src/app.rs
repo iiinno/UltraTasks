@@ -2130,14 +2130,18 @@ impl Desktop {
                         (
                             this.popup_content(window, cx),
                             matches!(this.popup, Some(Popup::QuickTask)),
+                            this.tokens.surface,
                         )
                     })
                     .ok();
-                let (content, quick) = current.unwrap_or((None, false));
+                let (content, quick, surface) = current.unwrap_or((None, false, transparent_black()));
                 let cancel = weak.clone();
                 let closed = weak.clone();
+                let top = f32::from(window.viewport_size().height) * 0.13;
                 dialog
-                    .centered()
+                    .when(!quick, |dialog| dialog.centered())
+                    .when(quick, |dialog| dialog.margin_top(px(top)).p(px(1.)))
+                    .bg(surface)
                     .w(px(if quick { 750. } else { 400. }))
                     .rounded(px(if quick { 21. } else { 12. }))
                     .font(crate::theme::ui_font())

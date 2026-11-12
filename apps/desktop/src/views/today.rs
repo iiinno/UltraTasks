@@ -459,7 +459,7 @@ impl Desktop {
             .gap_2()
             .border_t_1()
             .border_color(t.border)
-            .bg(t.surface)
+            .bg(t.canvas)
             .when(self.error, |d| {
                 d.child(
                     Icon::new(IconName::CircleAlert)
@@ -562,6 +562,7 @@ impl Desktop {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let popup = self.popup.clone()?;
+        let quick = matches!(popup, Popup::QuickTask);
         let dialog_title = match &popup {
             Popup::QuickTask => "新規タスク",
             Popup::Filters(_) => "タスクの絞り込み",
@@ -598,13 +599,15 @@ impl Desktop {
                 (f32::from(window.viewport_size().height) - 120.).clamp(160., 600.)
             ))
             .overflow_y_scroll()
-            .child(
-                div()
-                    .text_size(px(16.))
-                    .line_height(px(24.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(dialog_title),
-            );
+            .when(!quick, |content| {
+                content.child(
+                    div()
+                        .text_size(px(16.))
+                        .line_height(px(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(dialog_title),
+                )
+            });
         match popup {
             Popup::QuickTask => {
                 content = content.child(self.quick_task_content(window, cx));
@@ -1126,20 +1129,22 @@ impl Desktop {
                     );
             }
         }
-        content = content.child(
-            button(t, "close-popup")
-                .label(if matches!(self.popup, Some(Popup::Leave(_))) {
-                    "編集を続ける"
-                } else {
-                    "キャンセル"
-                })
-                .on_click(cx.listener(|this, _, window, cx| {
-                    if matches!(this.popup, Some(Popup::Date)) {
-                        this.date_validation = None;
-                    }
-                    this.dismiss_popup(window, cx);
-                })),
-        );
+        content = content.when(!quick, |content| {
+            content.child(
+                button(t, "close-popup")
+                    .label(if matches!(self.popup, Some(Popup::Leave(_))) {
+                        "編集を続ける"
+                    } else {
+                        "キャンセル"
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if matches!(this.popup, Some(Popup::Date)) {
+                            this.date_validation = None;
+                        }
+                        this.dismiss_popup(window, cx);
+                    })),
+            )
+        });
         Some(content.into_any_element())
     }
 }
