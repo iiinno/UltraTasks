@@ -1,29 +1,31 @@
 ---
 name: UltraTasks Windows
-description: 仕事の内容と割り当てた時間を読む、Windowsネイティブのタスク・時間割UI。
+description: Linearの公開UIを参照してGPUIで再実装する、Windowsネイティブのタスク・時間割UI。
 colors:
-  light-canvas: "#fcfcfd"
-  dark-canvas: "#111113"
-  light-surface: "#f9f9fb"
-  dark-surface: "#18191b"
+  light-canvas: "#f9f9fa"
+  dark-canvas: "#121213"
+  light-sidebar: "#efeff0"
+  dark-sidebar: "#09090a"
+  light-surface: "#ffffff"
+  dark-surface: "#121213"
   light-surface-hover: "#f0f0f3"
-  dark-surface-hover: "#212225"
-  light-border: "#e0e1e6"
-  dark-border: "#2e3135"
+  dark-surface-hover: "#171718"
+  light-border: "#e2e2e2"
+  dark-border: "#212224"
   light-text-primary: "#1c2024"
-  dark-text-primary: "#edeef0"
+  dark-text-primary: "#e2e4e7"
   light-text-secondary: "#60646c"
-  dark-text-secondary: "#b0b4ba"
-  light-focus-ring: "#0d74ce"
-  dark-focus-ring: "#70b8ff"
-  light-action-background: "#0d74ce"
-  dark-action-background: "#0090ff"
-  light-action-text: "#fcfcfd"
-  dark-action-text: "#111113"
-  light-selection-background: "#e6f4fe"
-  dark-selection-background: "#0d2847"
-  light-selection-text: "#113264"
-  dark-selection-text: "#c2e6ff"
+  dark-text-secondary: "#8a8f98"
+  light-focus-ring: "#60646c"
+  dark-focus-ring: "#8a8f98"
+  light-action-background: "#1c2024"
+  dark-action-background: "#e2e4e7"
+  light-action-text: "#ffffff"
+  dark-action-text: "#121213"
+  light-selection-background: "#e8e8ec"
+  dark-selection-background: "#1b1b1c"
+  light-selection-text: "#1c2024"
+  dark-selection-text: "#e2e4e7"
   light-error-background: "#feebe7"
   dark-error-background: "#391714"
   light-error-text: "#5c271f"
@@ -34,27 +36,36 @@ colors:
   dark-warning-text: "#ffca16"
 typography:
   body:
-    fontFamily: Yu Gothic UI
-    fontSize: "14px"
-    lineHeight: "20px"
+    fontFamily: Inter
+    fontSize: "13px"
+    lineHeight: "19.5px"
+    fontWeight: 450
   caption:
-    fontFamily: Yu Gothic UI
+    fontFamily: Inter
     fontSize: "12px"
     lineHeight: "18px"
   task-title:
-    fontFamily: Yu Gothic UI
-    fontSize: "14px"
-    lineHeight: "18px"
+    fontFamily: Inter
+    fontSize: "13px"
+    lineHeight: "20px"
+    fontWeight: 510
   task-meta:
-    fontFamily: Yu Gothic UI
+    fontFamily: Inter
     fontSize: "12px"
-    lineHeight: "16px"
+    lineHeight: "18px"
+  editor-title:
+    fontFamily: Inter
+    fontSize: "20px"
+    lineHeight: "26.6px"
+    fontWeight: 590
 rounded:
   control: "6px"
-  task-row: "4px"
+  navigation: "8px"
+  task-row: "8px"
   agenda-card: "3px"
-  popup: "10px"
-  large: "12px"
+  main: "12px"
+  create-dialog: "21px"
+  dialog: "12px"
 spacing:
   space-4: "4px"
   space-8: "8px"
@@ -66,22 +77,22 @@ components:
     backgroundColor: "{colors.light-action-background}"
     textColor: "{colors.light-action-text}"
     rounded: "{rounded.control}"
-    height: "32px"
+    height: "28px"
   button-primary-dark:
     backgroundColor: "{colors.dark-action-background}"
     textColor: "{colors.dark-action-text}"
     rounded: "{rounded.control}"
-    height: "32px"
+    height: "28px"
   button-ghost-light:
     backgroundColor: transparent
     textColor: "{colors.light-text-primary}"
     rounded: "{rounded.control}"
-    height: "32px"
+    height: "28px"
   button-ghost-dark:
     backgroundColor: transparent
     textColor: "{colors.dark-text-primary}"
     rounded: "{rounded.control}"
-    height: "32px"
+    height: "28px"
   input-light:
     backgroundColor: "{colors.light-surface}"
     textColor: "{colors.light-text-primary}"
@@ -96,162 +107,136 @@ components:
 
 # Design System: UltraTasks
 
-## Overview
+## 対象と確認状況
 
-2026-11-12時点のWindowsネイティブ実装を記録する。対象はRust/GPUIとGPUI Kitで描く業務画面で、WebViewやWeb版、iOS版、Android版の規約ではない。製品の条件は[PRODUCT.md](PRODUCT.md)、参照元の調査と再利用範囲は[UI参照調査](docs/ui-reference-study.md)を参照する。
+2026-11-12時点の実装 `a0fdec56b8c7fd30f7a612c91cb21ce597ebd56c` を静的に照合した仕様である。利用者の指定「自作はしないでください。コードレベルで再実装するくらい真似て作って」に従い、Linearの公開UIと部品定義をGPUIへ対応付けている。製品の条件は[PRODUCT.md](PRODUCT.md)、公開URL・採用値・確認範囲は[Linear UIの参照記録](docs/linear-ui-reference.md)に記載する。
 
-仕事の内容と割り当てた時間を先に読めるようにする。Linearの製品UIにある控えめなナビゲーション、弱い境界、操作帯の整理と、Geist・Radixの公開部品規約を参照し、既存のGPUI部品へ適合させている。具体的な寸法はUltraTasksの実装値であり、参照製品から実測した寸法とは呼ばない。
+機能基盤ではTask・Event・TimeBlockの区別、SQLite保存、非同期DBワーカー、未保存入力、Undo/Redo、検索と仮想化を維持する。これらの既存機能と今回のUIの確認状況は分けて扱う。GitHub CI run `43165128118` ではfmtが失敗した。整形反映後のCI結果は本書に未記録で、新しいUIのGUI確認も未実施である。本書はUIの完成、Linearとの同等性、ビルド・テストの成功を判定しない。
 
-前書きのトークンは現行実装から抽出した値であり、本文はその適用先と例外を示す。実行時の根拠は[theme/tokens.rs](apps/desktop/src/theme/tokens.rs)、Kitへの投影は[theme/mod.rs](apps/desktop/src/theme/mod.rs)、状態とレイアウトの根拠は[views/](apps/desktop/src/views/)にある。値の変更時は実装・[design/tokens.json](design/tokens.json)・本書を一緒に照合する。設計JSONの`draft`、`motion_proposal`、Android向け値や未使用の値を実装済みの規約へ昇格させない。
+実行時の値は[theme/tokens.rs](apps/desktop/src/theme/tokens.rs)、Kitへの設定は[theme/mod.rs](apps/desktop/src/theme/mod.rs)、配置と状態表示は[views](apps/desktop/src/views/)にある。[design/tokens.json](design/tokens.json)には出典と適合時の変更を記録しているが、描画時に読み込むファイルではない。前書きは現在のRust指定値を示す。設計JSONに残るAndroid向け密度、`motion_proposal`、未使用の役割はWindowsの実装値と区別する。
 
-本書はソースの静的読解に基づき、実画面の独立した見た目の合否を判定しない。画面幅・テーマ・再起動を含む操作確認、CI、残る確認の記録は[プロトタイプの状態](docs/prototype-status.md)に分ける。IME変換中、Narrator、全DPI、大規模データでのGUI性能についても、本書の記載を確認完了の証拠とはしない。
+## 画面構成
 
-## Colors
+Windows標準タイトルバーの下にサイドバーと一つの主領域を置く。主領域はタスク一覧、詳細編集、時間割を切り替える。新規タスクは中央の作成ダイアログで入力する。時間割は専用画面としてタスク一覧と時間軸を並べる。
 
-Radix Slateで面と文字を分け、Blueで操作・選択・focusを示す。エラーはTomato、競合などの警告はAmberを使う。light/darkの具体値は前書きの同名トークンに固定し、出典の色値は[palettes.json](design/palettes.json)にある。
+[Navigation](apps/desktop/src/app.rs)が画面の移動を扱う。`Tasks`と`List`は一覧、`Calendar`は時間割、`Task`・`ListTask`・`Entity`は詳細、`QuickInput`は作成ダイアログへ進む。`SearchInput`は一覧へ移動し、検索欄を開いて入力focusを移す。詳細を開くと主領域全体を編集面へ切り替え、時間軸も一覧と一緒に置き換える。
 
-| 意味付きトークン | Radixの対応 | 主な適用先 |
-| --- | --- | --- |
-| `canvas` / `surface` / `surface-hover` | Slate 1 / 2 / 3 | 作業領域、sidebar・操作帯・入力・popup、hover |
-| `border` | Slate 5 | paneの区切り、入力の通常境界 |
-| `text-primary` / `text-secondary` | Slate 12 / 11 | タイトル・本文、時刻・所属・補助ラベル |
-| `focus-ring` | Blue 11 | キーボードfocus、時間軸の現在時刻、作業枠の左線 |
-| `action-background` / `action-text` | lightはBlue 11、darkはBlue 9 / Slate 1 | 保存・適用などのprimaryボタン |
-| `selection-background` / `selection-text` | Blue 3 / 12 | 選択タスク、関連作業枠、適用中の絞り込み |
-| `error-background` / `error-text` | Tomato 3 / lightは12、darkは11 | 入力不正、保存失敗、削除の確認 |
-| `warning-background` / `warning-text` | Amber 3 / lightは12、darkは11 | 編集競合と下書き保持の説明 |
-
-通常のsidebar選択は`surface-hover`と`text-primary`で静かに示す。タスク行や関連作業枠の選択はBlueの組を使う。選択中の行へhoverしても選択色を保ち、hoverと選択を同じ意味にしない。primaryのhover/activeには現在と同じaction色を割り当てている。
-
-Jadeの色階調と`positive_*`は設計資産に存在するが、現行のRust `Tokens`に対応フィールドはない。完了タスクをJadeで塗る規約や、予定カテゴリ別の色分けは実装していない。完了はアイコン・文字と補助文字色、Event/TimeBlockの違いは種類名・アイコン・左線で示す。
-
-高コントラストでは[settings.rs](apps/desktop/src/settings.rs)がWindowsのシステム色を取得し、明示したlight/darkより優先する。canvas・surface・hoverはOSのcanvas、本文と補助文字はOSのtext、選択と主操作はhighlight/highlight textの組に置き換える。通常文字をdisabled色へ減光しない。Kitのdisabled用`muted_foreground`にはOSのgray textを渡す。hoverは塗りの差が消えるため、共通ボタンとタスク行にfocus色の輪郭を出す。
-
-Kit Input/ListItemは選択専用の文字色を持たないため、高コントラスト時の選択背景はhighlightのalpha 0.35を使用し、通常文字色を保持する。タスク行など、文字色も指定できる要素はOSの選択色の組を使う。エラーと警告はOSのcanvas/textへ置換しても、説明文やアイコンで意味を残す。色の切り替えで密度や寸法を変えない。
-
-本文・placeholderは4.5:1、必要な非文字状態は3:1を設計基準とする。トークンの文字色対・focus・scrollbarを対象にするテストは実装にあるが、任意の合成色、全Kit状態、全OS設定に対する実画面の適合判定とは区別する。
-
-## Typography
-
-フォントはWindowsにある`Yu Gothic UI`をrootとKitの双方へ指定する。独自のブランドフォントやフォントファイルは同梱しない。日本語本文は前書きの`body`、補助説明は`caption`、タスク行は`task-title`と`task-meta`を使用する。
-
-タスク・編集paneの見出しは16pxのsemibold、location barと時間割の見出しは14pxのsemibold。popup見出しは16px・行高24px。sidebarと編集用の単行入力は13px、通常の時間軸カードのタイトルは13px・行高20pxのmediumを使う。これは大きなdisplay見出しを設けない、日常操作向けの階層である。設計JSONにある24pxのtitle値を現在のpane見出しに適用しない。
-
-タスクのタイトルは2行まで折り返し、期限・作業時間・所属の補助行は1行で省略する。完全なタイトルは編集面で扱い、一覧の読み上げ用ラベルにも含める。sidebar名は省略表示とtooltipを併用する。時間軸では枠の実際の高さに応じて1行・2行・短い枠用の表示を選び、文字の都合で時間の長さを伸ばさない。
-
-## Layout
-
-寸法の`px`はGPUIのlogical pxであり、画面の物理ピクセルではない。以下は[現在のプランナー画面](apps/desktop/src/views/today.rs)の構成で、将来のすべての画面に同じ三列構成を強制する規則ではない。Windows標準タイトルバーを維持し、その下にsidebarと、location bar・作業pane・status barを置く。
-
-| viewport幅 | 左ナビゲーション | Task / Editor | Agenda |
+| viewport幅 | サイドバー | 通常のタスク一覧 | 時間割 |
 | --- | --- | --- | --- |
-| 1000px以上 | sidebar 192px | 360px固定 | 残りの幅 |
-| 780px以上1000px未満 | icon rail 52px | 360px固定 | 残りの幅 |
-| 780px未満 | icon rail 52px | 「タスク／編集」と「時間割」の切替。表示中paneが残りの全幅を使う | 同左 |
+| 900px以上 | 244px | 主領域の幅を使う | タスク一覧280pxと、残りの幅の時間軸 |
+| 900px未満 | icon rail 48px | 主領域の幅を使う | タスクと時間割を高さ36pxの切替帯で切り替える |
 
-判定は`width < 1000`と`width < 780`であり、1000pxちょうどはsidebar、780pxちょうどは二つの作業paneを表示する。900pxではTask/EditorとAgendaを残す。編集面は中央の一覧を置き換え、非compact時は右の時間軸を維持する。compactの切替帯は36px。起動コードの最小ウィンドウサイズは620×480pxである。
+判定は[views/today.rs](apps/desktop/src/views/today.rs)の `width < 900` に従う。900pxちょうどでは通常サイドバーと時間割の2領域を表示する。詳細内の縦配置は別の条件で決まり、後述する `available_width` を使う。寸法のpxはGPUIのlogical pxであり、物理ピクセルではない。
 
-| 領域 | 現在の寸法・余白 |
+| 領域 | 現在の指定値 |
 | --- | --- |
-| location/date bar・sidebar上端 | 高さ48px。location barの左右余白12px |
-| pane toolbar | 高さ40px、左右余白12px |
-| アプリ全体のstatus bar | **最小**高さ32px、左右12px・上下4px。エラーは2行まで表示でき、固定高ではない |
-| Taskの検索・追加領域 | 左右12px、上8px・下4px、主な縦間隔8px |
-| Editor本文 | 全周16px、主要field群の間隔20px。日付と時刻の間は8px、時刻欄の幅112px |
-| Editorの保存操作帯 | 左右16px・上下12px。アプリstatus barとは別の領域 |
-| 共通control・通常の単行Input | 前書きのcomponent高さを使用。検索Inputは28px、編集タイトルのTextareaは72px |
-| タスク行 | 最小高さ44px、左右6px・上下1px、子要素間4px。行内iconボタンは28px角 |
+| 主領域 | 上下と右の外余白8px、角丸12px、境界1px |
+| 主ヘッダー | 高さ58px、左右余白8px。詳細ヘッダーだけ左右16px |
+| サイドバー | 左右余白12px。rail時は8px |
+| ナビゲーション行 | 高さ28px、上下margin各1px、左右padding各7px、角丸8px |
+| 一覧の絞り込み・検索帯 | 高さ44px、左右余白12px |
+| 一覧のグループ見出し | 高さ36px、左右と上の外余白8px、左右padding各8px |
+| タスク行 | 固定高44px、左右padding各8px、要素間8px、角丸8px |
+| アプリのstatus bar | 最小高さ28px、左右余白12px。エラー文は2行まで |
 
-shellがpane全体へ一律のpaddingを重ねる方式は使わず、各paneがtoolbarと本文の余白を所有する。前書きのspacingに加えて、実装にはfield内の6px、editorの20pxなど用途に応じた局所値がある。
+主ヘッダーの58pxはLinear本体の `ContentViewHeader` の既定値 `57 + thinPixel` を1xで解釈した値である。別のsubheaderに使われる `44 - thinPixel` と混同しない。一覧の44px操作帯と行高も、主ヘッダーとは別に指定している。
 
-タスク行は`min_h(row_height)`と実内容の高さで決まる。タイトルが2行になると自然に増え、固定の「長文行高」は設定しない。例えばタイトル2行×18px＋補助行16px＋上下padding計2px＋border計2pxなら56pxになるが、これは算出例であり固定高や追加の最小高ではない。`Tokens::long_row_height`と設計JSONの旧長文行高キーは削除済み。設計JSONは実行時に読み込まれず、描画はRustのトークンと各viewの指定に従う。
+## 色と状態
 
-sidebarのリスト、タスク一覧、editor本文、時間軸はそれぞれ独立してスクロールする。toolbarと保存操作帯は本文と分離され、popupも高さを制限した独立scrollを持つ。
+[配色の根拠](design/tokens.json)は公開起動shell、本体の静的定義、ホームページのデモを分けている。前書きの色をすべてLinear本体の実測色とは呼ばない。
 
-タスク一覧はGPUI `list` / `ListState`で可視行を構築する。[TaskCache](apps/desktop/src/presentation/task_list.rs)はTask IDと行内offsetをanchorに更新前後の位置を復元し、変更行を差し替える。取得は200件単位、前後ページの保持は最大600件であり、全件を一度に描く方式へ戻さない。
-
-時間軸はscroll位置付近だけを取得・描画する。現在のコードはviewport高を使い、描画の前後60px、取得の前後90pxを余分に確保する。「候補一覧」は取得済み候補を通常の縦scrollへ並べ、続きを明示的に取得する。候補一覧・sidebar・editorをタスク一覧と同じ仮想化方式だとは記載しない。
-
-## Elevation & Depth
-
-常設paneはcanvas/surfaceの面差と細い境界で分ける。タスク一覧やeditorを、影付きカードでさらに囲わない。Kitのtheme tokenは単色へ再投影し、読み込まれた背景gradientも除く。
-
-popupはsurfaceの面にGPUIの`shadow_lg()`を付け、黒の半透明overlay（`0x00000030`）越しに作業画面との前後関係を示す。高コントラスト時はpopupの影を境界線へ置換し、Kitの通常のshadowも無効にする。`shadow_lg()`の実体を独自のCSS影値へ翻訳しない。
-
-focus表示は装飾の影と別の役割を持つ。[共通focus_outline](apps/desktop/src/views/mod.rs)はoffset・blurを0とし、focus色のspread 4pxとcanvas色のspread 2pxを重ねる。focusしてもborder幅やcontrolの寸法を変えない。共通ButtonとInputの外枠、タスク一覧、時間軸カードがこれを使う。Kitの通常focus ringはアプリ設定で無効化されるため、この共通focus表現を削らない。Select/Radio等は既存部品の振る舞いも確認対象に含める。
-
-## Shapes
-
-角丸は前書きの用途別トークンに従う。control/Inputは`control`、タスク行は`task-row`、時間軸カードは`agenda-card`、自前popupは`popup`。`large`はKitの`radius_lg`に設定している値で、全paneへ適用するものではない。
-
-paneとtoolbarの区切りは1px。タスク行は通常時にも透明の1px境界を確保し、高コントラスト時のhoverで輪郭を付けても寸法がずれない。時間軸カードの左線は1px、現在時刻の線は2px。予定の枠には時間の長さという意味があるため、一般的なカードの最小高を適用しない。
-
-## Components
-
-### Buttonと入力
-
-共通ButtonはGPUI Kitの`ghost`・`small`・`compact`を基礎にする。移動・設定・行内操作の主張を抑え、保存・適用は`primary`、削除の最終確認は`danger`で示す。toolbarや行内操作には28px、status barのUndo/Redoなどには24pxの高さを明示している。すべてのボタンが共通の高さで描かれるわけではない。
-
-検索は検索icon・消去操作を持つInputで、通常のborderを省く。quick addと日時Inputにはsurfaceと通常境界を用い、Inputの外側に共通focus枠を付ける。タイトル編集にはTextareaを使うが、保存時のタイトル制約は既存のvalidationに従う。単行InputとTextareaの見た目だけを理由にデータ型を変えない。
-
-入力エラーは該当fieldの境界と近接する説明文で示し、説明は`Role::Status`と読み上げ用ラベルを持つ。日時欄には`YYYY-MM-DD · 9:00 / 9時`の手掛かりを表示する。無効な値でも下書きを残し、保存中・競合中・復旧待ちのdisabledは既存の状態に従う。
-
-### Sidebarとタスク一覧
-
-[sidebar](apps/desktop/src/views/sidebar.rs)は実在するプランナー、検索、追加、リスト、リスト・カレンダー管理、表示設定を配置する。項目にはキーボード操作を備えたButtonを使う。railでは文字を隠してもtooltipとaccessibility labelを残し、iconは16pxとする。
-
-[タスク行](apps/desktop/src/views/task_list.rs)は完了操作、タイトルと補助情報、作業時間操作の順。Lucideの`Circle` / `CircleCheck`で未完了/完了を示す。補助行は選択日の作業枠・所要時間・所属、作業枠がなければ所属・期限を表示する。リストには矢印移動・選択タスクを開く・完了操作のactionが接続される。完了直後の行と一覧anchorを保持する既存の動作を外観の都合で消さない。
-
-読み込み中、未取得・取得失敗、条件に合う結果なし、未完了なしを別の文言で表す。未取得を「0件」と同一視しない。保存状態と取得失敗の再試行は画面下のstatus barから読めるようにする。
-
-### Agenda
-
-[Agenda](apps/desktop/src/views/agenda.rs)は日単位の実際の時間を縦に配置する。1分を1 logical pxとし、日境界と日跨ぎをclipする。DSTで一日が24時間にならない場合も実際の時間幅を使う。EventはCalendar、TimeBlockはClockのiconと種類名で区別し、選択タスクに関連する枠は選択色にする。
-
-40px未満の短い枠はタイトルと時刻を1行へまとめる。通常枠はタイトルと種類・時刻を分け、高さ60px以上ならタイトルを2行まで表示する。30分枠を文字のために長く描かない。tooltipと候補一覧で補足する。
-
-[配置処理](apps/desktop/src/presentation/agenda.rs)では重なりをlaneへ分け、lane幅が120px未満なら重複グループを件数付きの候補入口へまとめる。この入口はグループの占有時間全体を保つ。終日欄は先頭3件と総件数から候補一覧へ進める。狭さや密集を理由に予定自体を隠して完了扱いにしない。
-
-時間軸カードはfocus可能で、Enter/Spaceで編集へ進む。Task/TimeBlockのドラッグは仮配置を表示し、時刻の確認へつなぐ。行のClock操作からも作業時間を指定できる。時刻編集と入力保護の既存の経路を維持する。
-
-### Editor・確認・保存状態
-
-[Editor](apps/desktop/src/views/editor.rs)は見出しと未保存/保存中の表示、タイトルまたは関連タスク、状態・期限/時刻・所属、関連作業時間を縦に並べる。本文をscrollしても下部の削除・取消・保存操作を分離して扱える。競合時は警告色の説明と下書きコピー・最新データを開く操作を表示する。
-
-未保存の編集から一覧や別のリストへ移動する操作は[共通navigate](apps/desktop/src/app.rs)を通す。確認には「保存して移動」「変更を破棄」「編集を続ける」を用意し、保存中はその状態に応じた文言にする。popupには`Role::Dialog`、focus trap、閉じた後のfocus復帰がある。EscapeはIME変換中の扱いを既存処理へ委ねる。これらの接続が存在することと、NarratorやIMEの実機受け入れ完了は別である。
-
-アプリstatus barは保存結果・失敗・再試行・Undo/Redoを扱う。通常文言は1行、エラーは2行までとし、tooltipでも全文を補足する。保存したタスクへ戻る操作や履歴のdisabled状態も実際の状態から決める。
-
-### Motion
-
-[MotionSpec](apps/desktop/src/theme/motion.rs)の通常値はeditorのfade 150msと時間軸の位置補間200ms。editorを開く単位・保存後の移動単位でGPUIの有限Animationを使い、完了を入力待ちの条件にしない。常時繰り返す装飾アニメーションはない。
-
-OSの動き軽減、アプリの`Reduced`または`None`では両方を0msにし、即時に最終状態へ進む。[設定適用](apps/desktop/src/settings.rs)はKitのduration/springも0へ設定し、caretをsteadyにする。通常時のcaretには3秒のidle timeoutを設ける。Kitの通常motion設定とアプリのfade/位置補間は別であり、設計JSONの`motion_proposal`にある100msのfeedbackやeasingを実装済みと扱わない。
-
-### アイコンと資産の出典
-
-UIはGPUI Kitの`IconName` / `Icon`を用い、sidebarは16px、検索や補助操作は14px、時間軸の種類iconは12pxを明示する箇所がある。すべてのiconを同じサイズと断定せず、iconだけの操作に名前とtooltipを付ける。
-
-[main.rs](apps/desktop/src/main.rs)は`gpui_kit::assets::AllAssets`を登録する。GPUI Kit Assets 0.9.0のこの型はLucideとKitの全iconカタログを埋め込む。`design/icons/`に保存した選定SVGと、実行時にKitから解決するicon資産の出典を区別して管理する。
-
-| 資産・部品 | 由来と保持する通知 |
+| 色の役割 | 取得元と適用 |
 | --- | --- |
-| Radixの色 | commit `dbdb85470547c7d34b9001f48fddb08ded335979`。Slate/Blue/Jade/Amber/Tomatoのlight/darkを値を変えず抽出。[MIT](third_party/radix-colors/LICENSE) |
-| `design/icons/`の選定SVG | Lucide commit `45aaec4b721c98aa86a2acd0ab7281bcf68b9c5e`の11ファイルを無変更で保持。[ISCとFeather由来部分のMIT](third_party/lucide/LICENSE) |
-| 実行時のKitとicon資産 | GPUI Kit 0.9.0、commit `7591a35eced761e3613c01e71ff04c10129dae1a`。[Apache-2.0](licenses/GPUI-KIT-APACHE-2.0.txt)と[Lucide ISC/MIT](licenses/LUCIDE-ISC-MIT.txt) |
-| GPUI | gpui-pre 0.3.11、元のZed rev `f816e1f9263e3a8ef63c4baaa02e1441ce1c6038`。[Apache-2.0](licenses/GPUI-APACHE-2.0.txt) |
+| `sidebar`・`canvas`・`border` | 公開起動shellのdarkとlightの値を採用。認証後のテーマ出力は未確認 |
+| darkの本文と補助文字 | ホームページのデモから `#e2e4e7` と `#8a8f98` を採用 |
+| darkのhoverと選択 | デモの白overlay `#ffffff05` と `#ffffff0a` をshellの `#121213` へsRGBで合成し、不透明な `#171718` と `#1b1b1c` に丸めた値 |
+| lightの本文・補助文字・hover・選択 | 本体の解決済みテーマ色が未確定のため、既存のRadix Slate値を維持 |
+| `surface` | darkはcanvasと同じ値。lightは本体テーマ生成器の白い基底色に対応する `#ffffff` |
+| 主操作とfocus | 主操作は中立色の文字と面を反転し、focusは補助文字色を使うUltraTasks側の対応。Linearからの実測色ではない |
+| エラーと警告 | 既存のRadix TomatoとAmberの組を維持 |
 
-正確な取得ファイルと変更内容は[upstream-lock.json](design/upstream-lock.json)、通知全体は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照する。GPUIのApacheライセンスをZedのGPL UI crateへ拡張解釈しない。
+通常のサイドバー選択はhover面と本文色、タスク行の選択は選択面と選択文字色を使う。選択行にhoverしても選択色を維持する。完了はLucideの状態アイコンと補助文字色でも示す。Jadeの階調は設計資産に残るが、現行 `Tokens` に完了専用色はない。
 
-LinearとGeistは構成・操作規約の参照先であり、固有コード・商標・ロゴ・フォント・画像をコピーしていない。React向け部品のコードもそのまま移植していない。今回の業務画面に生成画像や比較用の製品画像を配布資産として追加しない。過去のコンセプト画像は実装画面の証拠ではない。
+高コントラストではWindowsのシステム色が通常テーマより優先される。サイドバーを含む各面はOSのcanvas、通常文字はOSのtext、選択と主操作はhighlightとhighlight textを使う。hoverの塗りが同じになる箇所は輪郭で示す。KitのInputとListItemには選択専用の文字色がないため、選択背景をhighlightのalpha 0.35とし、通常文字色を保つ。エラーと警告は文字とアイコンでも区別する。
 
-## Do's and Don'ts
+本文・placeholderの4.5:1、必要な非文字状態の3:1は設計基準である。関連テストがソースにあることを、新しい色や全Kit状態の合格記録へ置き換えない。
 
-- **Do** 新しい表示にも既存のsemantic tokenとGPUI Kitの公開部品APIを使い、通常・hover・focus・selected・disabled・errorを同じ状態モデルへ接続する。
-- **Do** Task、Event、TimeBlockの意味、時間の占有範囲、下書き、Undo/Redoと保存状態を保つ。
-- **Do** logical pxと物理ピクセル、ソース上の実装値と設計目標、静的確認と実画面での確認を区別する。
-- **Do** 長い日本語、空・取得失敗・入力エラー、light/dark、高コントラスト、動き軽減を確認対象として残し、実施した範囲だけを報告する。
-- **Don't** 見た目を揃えるために長い行を固定高へ押し込めたり、短い時間枠を伸ばしたり、全件描画へ戻したりしない。
-- **Don't** focusを弱い通常境界へ埋めず、状態の識別を色だけに依存させない。
-- **Don't** 未実装の機能・架空の情報・新しいpaletteを装飾目的で追加しない。
-- **Don't** Linear/Geist固有資産、生成コンセプト、未確認のアクセシビリティや性能を配布資産・完成の証拠として扱わない。
+## 文字とフォント
+
+Inter 4.1の静的TrueType版400・500・600・700を同梱する。日本語はWindowsの `Yu Gothic UI` へfallbackし、このフォント自体は同梱しない。rootとKitのfont family、ダイアログの本文にInterを設定している。
+
+| 用途 | 現在のRust指定 |
+| --- | --- |
+| 本文 | 13px、行高19.5px、weight 450 |
+| 共通ボタン | weight 500、高さ28pxが既定 |
+| ナビゲーション・一覧のグループ名 | 13px、weight 510 |
+| タスク名 | 13px、行高20px、weight 510、1行省略 |
+| 一覧の属性 | 12px、行高18px、1行省略 |
+| 詳細のタイトル・関連タスク名 | 20px、行高26.6px、weight 590 |
+| 新規タスクのタイトル入力 | 20px、weight 590、入力高40px |
+| ダイアログの見出し | 16px、行高24px、semibold |
+
+本体CSSの本文weight 450を指定しているが、Windows DirectWriteでの静的face選択とvariable fontの見た目の一致は未検証である。510と590も画面側の要求値を示す。設計JSONのnavigation 500・title 600は役割の定義であり、これらのviewには510・590の明示指定がある。設計JSONのtitle tracking `-0.24` も、現在のeditorで適用済みとは扱わない。
+
+一覧ではタイトルと属性を横に並べる。全文は詳細のTextareaと一覧の読み上げ用ラベルで扱う。sidebar名は省略表示とtooltipを併用する。行高を固定したことによる長い日本語の読みやすさや、fallback後の字形・行高はGUIでの確認対象である。
+
+## 詳細画面
+
+[views/editor.rs](apps/desktop/src/views/editor.rs)は主領域を本文と属性へ分ける。本文にはタイトルまたは関連タスク名と作業時間、属性には状態、期限、日付・時刻、所属を置く。リストとカレンダー自体の編集には属性列を設けない。
+
+`available_width = viewport幅 - sidebar幅 - 10` とし、sidebar幅は900px未満で48px、それ以外で244pxとする。`available_width < 900` なら本文の下へ属性を並べる。900pxちょうどでは横配置であり、ウィンドウ幅900pxの判定とは異なる。
+
+| 詳細の領域 | 指定値・計算式 |
+| --- | --- |
+| 属性列の幅 | `(available_width × 0.26087 + 66.087).clamp(280, 400)` px |
+| 列の間隔 | `(available_width × 0.08696 - 55.304).clamp(16, 56)` px |
+| 本文の最大幅 | 本文フォント13pxの `0` の字幅×80。CSSの80chに対応 |
+| 本文・属性を包む領域の上padding | 21.5px |
+| タイトルを含む本文の上margin | 通常32px。`available_width <= 768` では18px |
+| 横配置の左右padding | 左は列間隔と同じ値、右は列間隔に14pxを加える |
+| 縦配置 | 左右padding16px、属性の上padding24pxと境界1px |
+
+保存ボタンと未保存・保存中の表示は上部ヘッダーにある。「取消」と「削除」はヘッダーのDropdownMenuに置く。本文は独立してスクロールする。入力エラーは該当欄と近接した説明、競合は下書きを残した説明とコピー・最新データを開く操作で示す。
+
+## 作成と補助操作
+
+[app.rs](apps/desktop/src/app.rs)の `Popup` とGPUI Kit 0.9.0の既存部品を使う。開閉の状態と保存処理の状態は別に保持する。
+
+| 操作 | 実装している部品と指定 |
+| --- | --- |
+| 新規タスク | `WindowExt::open_dialog` の中央Dialog。幅750px、角丸21px。新規ボタンとCtrl+Nから開く |
+| 追加先リスト | 作成Dialog内のDropdownMenu。同じ入力Entityを保持して追加先を変更する |
+| 絞り込み | 起点のButtonに付けたPopover。幅384px、`Anchor::TopLeft`、offset 6px |
+| 時間割の日付 | 編集中でない時間割では起点付きPopover。幅344px、`Anchor::TopLeft`、offset 6px |
+| 表示設定・リスト管理・未保存確認・削除確認 | 中央Dialog。幅400px、角丸12px。時間割以外の日付操作もこの経路 |
+| 詳細の取消・削除 | `dropdown_menu_with_anchor(Anchor::TopRight)` |
+
+作成入力はダイアログに置き、一覧には常設しない。検索欄は検索操作で開く。共通ボタンは28px、status bar内は24px、新規作成の確定ボタンは32pxとする。検索Inputは28px、日時Inputは32px、詳細タイトルのTextareaは80pxである。
+
+Dialogは外側クリックで閉じない設定とし、既定のEnter確認で閉じない。EscapeはIMEの変換状態を確認して既存の取消経路へ進める。Popoverは起点から配置し、Kitの開閉とfocus処理へ接続する。画面端での配置、focus復帰、IMEとの組み合わせは新しいGUIで未確認である。
+
+共通focus表示はoffset・blurが0、spreadが1pxの単色輪郭である。ButtonはKit標準ringを個別に無効化し、`focus_visible` でこの輪郭を表示する。Kitテーマ全体のfocus ringは有効であり、他の部品まで無効にした扱いにはしない。タイトル入力のfocusは1px境界の色で示す。
+
+## 保存と一覧の状態
+
+詳細の未保存入力または保存中の状態があるとき、`navigate` は `Popup::Leave` を開く。「保存して移動」「変更を破棄」「編集を続ける」の既存の操作を維持する。Dialogを閉じたことだけではDB保存の成功としない。保存コマンド、`FormStamp`、遅れて届く応答の照合、再試行はアプリの既存処理を使う。
+
+status barは保存結果、取得・保存の失敗、再試行、Undo/Redoを扱う。通常文は1行、エラーは2行まで表示し、tooltipにも全文を渡す。無効化の状態は保存中、復旧中、履歴の有無から決める。
+
+タスク一覧はGPUIの `list` と `ListState` を継続する。[TaskCache](apps/desktop/src/presentation/task_list.rs)はTask IDと行内offsetを使ってスクロール位置を復元する。取得は200件単位で、前後ページの保持上限は600件である。固定高44pxの行へ変更しても `uniform_list` やDataTableへ置き換えていない。矢印移動、選択タスクを開く操作、完了操作、直後の完了行保持も既存の経路を使う。
+
+読み込み中、未取得・取得失敗、条件に合う結果なし、未完了なしを別の文言で示す。表示の刷新を理由に、未取得を0件と扱ったり全件描画へ戻したりしない。
+
+## 時間割と動き
+
+時間割ではTaskの作業枠であるTimeBlockと、独立した予定であるEventを区別する。[Agenda](apps/desktop/src/views/agenda.rs)は実際の時間幅を縦に置き、日跨ぎとDSTを既存の計算で扱う。表示付近の取得・描画、重複候補、ドラッグの仮配置と時刻確認を維持する。時間枠を文字量に合わせて長くする規約は追加しない。
+
+[MotionSpec](apps/desktop/src/theme/motion.rs)の通常値は詳細のfade 150msと時間軸の位置補間200msである。OSの動き軽減、アプリの `Reduced` または `None` では0msになる。Dialogには入口のアニメーションを指定しない。これらの指定値と、実際の操作時に確認した動きは分けて記録する。
+
+## 資産と残る確認
+
+Interは[公式4.1リリース](https://github.com/rsms/inter/releases/tag/v4.1)の静的TTFを無変更で使用し、SIL Open Font License 1.1の通知を保持する。正確なcommitとファイルhashは[fonts/source.json](apps/desktop/assets/fonts/source.json)、通知は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)にある。Lucide、Radix、GPUI Kit、GPUIの既存通知も維持する。
+
+Linearの公開CSS・JavaScript・画面資料は構造と値の参照に使い、生コードや参照画像を配布資産としてコピーしない。公開されていることをコード・商標・ロゴの再配布許諾とは扱わない。GPUIのApacheライセンスをZedのGPL UI crateへ適用しない。
+
+CI結果と新しいGUIの判定は、対象SHAを付けて[プロトタイプの状態](docs/prototype-status.md)に別途記録する。旧実装で確認した保存や操作の記録は、新UIの外観・操作の証拠へ転用しない。一覧、作成、詳細、保存、再起動後の復元、検索、時間割、Undo/Redoに加え、狭い幅、dark・light、長い日本語、IME、focus、Narrator、高コントラスト、DPI、動き軽減、大規模データでのGUI性能は確認範囲を明示する。
