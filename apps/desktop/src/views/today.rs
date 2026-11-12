@@ -520,6 +520,7 @@ impl Desktop {
         let t = self.tokens;
         let mut content = div()
             .id("popup")
+            .track_focus(&self.popup_focus)
             .v_flex()
             .gap_3()
             .w_full()

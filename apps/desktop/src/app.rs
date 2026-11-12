@@ -339,6 +339,7 @@ pub struct Desktop {
     pub(crate) popup_focus: FocusHandle,
     pub(crate) return_focus: Option<FocusHandle>,
     pub(crate) dialog_open: bool,
+    pub(crate) popup_resume_quick: bool,
     pub(crate) calendar_view: bool,
     pub(crate) search_open: bool,
     pub(crate) quick: Entity<InputState>,
@@ -349,6 +350,7 @@ pub struct Desktop {
     pub(crate) quick_validation: Option<String>,
     pub(crate) quick_version: u64,
     pub(crate) quick_id: Option<TaskId>,
+    pub(crate) quick_list: Option<ListId>,
     pub(crate) quick_ready: bool,
     pub(crate) search_text: String,
     pub(crate) tasks: TaskCache,
@@ -454,6 +456,7 @@ impl Desktop {
             popup_focus: cx.focus_handle(),
             return_focus: None,
             dialog_open: false,
+            popup_resume_quick: false,
             calendar_view: false,
             search_open: false,
             quick,
@@ -464,6 +467,7 @@ impl Desktop {
             quick_validation: None,
             quick_version: 0,
             quick_id: None,
+            quick_list: None,
             quick_ready: true,
             search_text: String::new(),
             tasks: TaskCache::default(),
@@ -636,7 +640,7 @@ impl Desktop {
             })
             .unwrap_or(true)
         });
-        this.quick.update(cx, |input, cx| input.focus(window, cx));
+        this.focus.focus(window, cx);
         this.initial_scroll();
         this.read(Work::Open, ReadContext::Open, window, cx);
         this.schedule_clock(window, cx);
@@ -1403,7 +1407,7 @@ impl Desktop {
             };
             let data = TaskData {
                 title: Title::new(&title)?,
-                list: self.filters.list.unwrap_or(info.default_list),
+                list: self.quick_list.or(self.filters.list).unwrap_or(info.default_list),
                 status: TaskStatus::Open,
                 due: None,
             };
@@ -1639,6 +1643,7 @@ impl Desktop {
                         && self.quick.read(cx).value().as_ref() == title
                     {
                         self.quick_validation = None;
+                        self.quick_list = None;
                         self.quick.update(cx, |input, cx| {
                             input.set_value("", window, cx);
                         });
@@ -1753,6 +1758,9 @@ impl Desktop {
         self.discard_form();
         match nav {
             Navigation::QuickInput => {
+                if self.quick_list.is_none() {
+                    self.quick_list = self.filters.list.or_else(|| self.info.as_ref().map(|info| info.default_list));
+                }
                 self.open_popup(Popup::QuickTask, window, cx);
                 self.quick.update(cx, |input, cx| input.focus(window, cx));
             }
@@ -2100,7 +2108,10 @@ impl Desktop {
             .focus(window, cx);
     }
     pub(crate) fn open_popup(&mut self, popup: Popup, window: &mut Window, cx: &mut Context<Self>) {
+        let resume_quick = matches!(popup, Popup::Leave(_))
+            && (matches!(self.popup, Some(Popup::QuickTask)) || self.popup_resume_quick);
         self.clear_popup(window, cx);
+        self.popup_resume_quick = resume_quick;
         let anchored = matches!(popup, Popup::Filters(_))
             || matches!(popup, Popup::Date) && self.calendar_view && self.form.is_none();
         self.popup = Some(popup);
@@ -2123,12 +2134,18 @@ impl Desktop {
                     .entrance(gpui_kit::component::dialog::DialogEntrance::None)
                     .on_ok(|_, _, _| false)
                     .on_cancel(move |_, window, cx| {
-                        cancel.update(cx, |this, cx| !this.composing(window, cx)).unwrap_or(true)
+                        cancel.update(cx, |this, cx| {
+                            if !this.composing(window, cx) {
+                                this.dismiss_popup(window, cx);
+                            }
+                            false
+                        }).unwrap_or(true)
                     })
                     .on_close(move |_, _, cx| {
                         let _ = closed.update(cx, |this, cx| {
                             this.popup = None;
                             this.dialog_open = false;
+                            this.popup_resume_quick = false;
                             this.date_validation = None;
                             cx.notify();
                         });
@@ -2140,16 +2157,22 @@ impl Desktop {
     }
     pub(crate) fn clear_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.popup = None;
+        self.popup_resume_quick = false;
         if self.dialog_open {
             self.dialog_open = false;
             window.close_dialog(cx);
         }
     }
     pub(crate) fn dismiss_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let resume_quick = self.popup_resume_quick && matches!(self.popup, Some(Popup::Leave(_)));
         if matches!(self.popup, Some(Popup::Date)) {
             self.date_validation = None;
         }
         self.clear_popup(window, cx);
+        if resume_quick {
+            self.open_popup(Popup::QuickTask, window, cx);
+            self.quick.update(cx, |input, cx| input.focus(window, cx));
+        }
         cx.notify();
     }
     pub(crate) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2206,7 +2229,11 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.form.is_none() && !self.busy {
+        if self.calendar_view
+            && self.form.is_none()
+            && !self.busy
+            && (f32::from(window.viewport_size().width) >= 900. || self.compact_agenda)
+        {
             self.return_focus = window.focused(cx);
             self.drag = Some(Drag {
                 source,
@@ -2222,6 +2249,13 @@ impl Desktop {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.calendar_view
+            || self.form.is_some()
+            || (f32::from(window.viewport_size().width) < 900. && !self.compact_agenda)
+        {
+            self.drag = None;
+            return;
+        }
         let Some(drag) = &mut self.drag else {
             return;
         };
