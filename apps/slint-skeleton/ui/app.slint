@@ -1,0 +1,84 @@
+import { ListView } from "std-widgets.slint";
+
+export struct TaskItem {
+    title: string,
+    done: bool,
+}
+
+export component AppWindow inherits Window {
+    in property <[TaskItem]> tasks;
+    in property <string> status;
+    in-out property <string> draft <=> input.text;
+    // IME確認用。変換確定のEnterや変換取消のEscがアプリへ漏れると、この数が増える。
+    in-out property <int> enter-count;
+    in-out property <int> escape-count;
+    callback create(string);
+
+    title: "UltraTasks skeleton";
+    preferred-width: 720px;
+    preferred-height: 560px;
+    background: #101113;
+    default-font-size: 13px;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        Rectangle {
+            height: 36px;
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: input.has-focus ? #5e6ad2 : #2a2c31;
+            background: #17181b;
+
+            if root.draft == "": Text {
+                x: 10px;
+                width: parent.width - 20px;
+                vertical-alignment: center;
+                color: #6b6f76;
+                text: "タスクを入力してEnter";
+            }
+
+            input := TextInput {
+                x: 10px;
+                width: parent.width - 20px;
+                vertical-alignment: center;
+                single-line: true;
+                color: #e6e6e6;
+                accessible-label: "新しいタスク";
+                accepted => {
+                    root.enter-count += 1;
+                    root.create(self.text);
+                }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.escape-count += 1;
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+        }
+
+        Text {
+            color: #8a8f98;
+            text: "Enter受信 " + root.enter-count + " 回 / Esc受信 " + root.escape-count + " 回　" + root.status;
+        }
+
+        ListView {
+            for task in root.tasks: Rectangle {
+                height: 44px;
+                accessible-role: list-item;
+                accessible-label: task.title;
+                Text {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    color: task.done ? #6b6f76 : #e6e6e6;
+                    text: task.title;
+                }
+            }
+        }
+    }
+}

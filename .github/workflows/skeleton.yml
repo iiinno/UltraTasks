@@ -1,0 +1,35 @@
+name: Slint skeleton
+
+on:
+  push:
+    branches: [spike/slint-skeleton]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: apps/slint-skeleton
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build
+        run: |
+          cargo build --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = Get-ChildItem -Path target -Recurse -Filter ultratasks-skeleton.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Path out | Out-Null
+          Copy-Item $exe.FullName, Cargo.lock -Destination out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slint-skeleton-${{ github.sha }}
+          path: apps/slint-skeleton/out/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,15 @@
+[package]
+name = "ultratasks-skeleton"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# 既存ワークスペースのCargo.lockと検証を変えないため、独立したワークスペースにする。
+[workspace]
+
+[dependencies]
+slint = "=1.18.1"
+ultratasks-core = { path = "../../crates/ultratasks-core" }
+
+[build-dependencies]
+slint-build = "=1.18.1"
