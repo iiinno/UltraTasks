@@ -59,12 +59,18 @@ fn toggle(store: &mut Store, row: &TaskRow) -> Result<()> {
 // 保存の成否にかかわらず一覧を読み直し、画面をDBの状態へ合わせる。
 fn finish(ui: &AppWindow, state: &mut State, saved: Result<()>) {
     let loaded = load(&mut state.store).map(|rows| state.rows = rows);
+    let default_list = state.store.info().default_list;
     let items: Vec<TaskItem> = state
         .rows
         .iter()
         .map(|row| TaskItem {
             title: row.task.data.title.as_str().into(),
-            meta: row.list_title.as_str().into(),
+            // 既定リストの名前は全行で同じになるので出さない。
+            meta: if row.task.data.list == default_list {
+                "".into()
+            } else {
+                row.list_title.as_str().into()
+            },
             done: row.task.data.status == TaskStatus::Done,
         })
         .collect();
