@@ -1,0 +1,96 @@
+import { Tokens } from "tokens.slint";
+
+export struct TaskItem {
+    title: string,
+    meta: string,
+    done: bool,
+}
+
+// 寸法はDESIGN.mdの「タスク行」。固定高44px、左右padding 8px、要素間8px、角丸8px。
+export component TaskRow inherits Rectangle {
+    in property <TaskItem> task;
+    in property <bool> selected;
+    in property <bool> focused;
+    callback clicked();
+    callback toggled();
+
+    height: Tokens.row-height;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: root.selected && root.focused ? Tokens.focus-ring : transparent;
+    background: root.selected ? Tokens.selection : touch.has-hover || status.has-hover ? Tokens.surface-hover : transparent;
+    accessible-role: list-item;
+    accessible-label: task.title;
+    accessible-item-selected: root.selected;
+
+    touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 24px;
+                height: 24px;
+                border-radius: 6px;
+                background: status.has-hover ? Tokens.border : transparent;
+                accessible-role: checkbox;
+                accessible-label: task.title;
+                accessible-checkable: true;
+                accessible-checked: task.done;
+                accessible-action-default => {
+                    root.toggled();
+                }
+
+                // Lucideのcircleとcircle-check（24px格子、線幅2）を16pxへ縮めた形。
+                Rectangle {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 7px;
+                    border-width: 1.4px;
+                    border-color: Tokens.text-secondary;
+                }
+
+                if task.done: Path {
+                    width: 16px;
+                    height: 16px;
+                    viewbox-width: 24;
+                    viewbox-height: 24;
+                    commands: "M 9 12 L 11 14 L 15 10";
+                    stroke: Tokens.text-secondary;
+                    stroke-width: 1.4px;
+                }
+
+                status := TouchArea {
+                    clicked => {
+                        root.toggled();
+                    }
+                }
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+            overflow: elide;
+            font-weight: 500;
+            color: task.done ? Tokens.text-secondary : Tokens.text-primary;
+            text: task.title;
+        }
+
+        Text {
+            horizontal-stretch: 0;
+            vertical-alignment: center;
+            font-size: 12px;
+            color: Tokens.text-secondary;
+            text: task.meta;
+        }
+    }
+}

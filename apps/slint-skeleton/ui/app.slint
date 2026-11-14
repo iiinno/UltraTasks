@@ -1,82 +1,153 @@
 import { ListView } from "std-widgets.slint";
+import { Tokens } from "tokens.slint";
+import { TaskItem, TaskRow } from "task-row.slint";
+import "../../desktop/assets/fonts/Inter-Regular.ttf";
+import "../../desktop/assets/fonts/Inter-Medium.ttf";
 
-export struct TaskItem {
-    title: string,
-    done: bool,
-}
+export { TaskItem }
 
 export component AppWindow inherits Window {
     in property <[TaskItem]> tasks;
     in property <string> status;
     in-out property <string> draft <=> input.text;
-    // IME確認用。変換確定のEnterや変換取消のEscがアプリへ漏れると、この数が増える。
-    in-out property <int> enter-count;
-    in-out property <int> escape-count;
+    in-out property <int> selected-index: 0;
     callback create(string);
+    callback toggle(int);
 
-    title: "UltraTasks skeleton";
-    preferred-width: 720px;
-    preferred-height: 560px;
-    background: #101113;
+    title: "UltraTasks";
+    preferred-width: 960px;
+    preferred-height: 640px;
+    background: Tokens.sidebar;
+    default-font-family: "Inter";
     default-font-size: 13px;
 
-    VerticalLayout {
-        padding: 16px;
-        spacing: 12px;
+    function select(index: int) {
+        root.selected-index = max(0, min(root.tasks.length - 1, index));
+        if root.selected-index * Tokens.row-height < -list.content-y {
+            list.content-y = -root.selected-index * Tokens.row-height;
+        } else if (root.selected-index + 1) * Tokens.row-height > list.visible-height - list.content-y {
+            list.content-y = list.visible-height - (root.selected-index + 1) * Tokens.row-height;
+        }
+    }
 
-        Rectangle {
-            height: 36px;
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: input.has-focus ? #5e6ad2 : #2a2c31;
-            background: #17181b;
+    // 主領域。外余白8px、角丸12px、境界1px。サイドバーはまだ無い。
+    Rectangle {
+        x: 8px;
+        y: 8px;
+        width: parent.width - 16px;
+        height: parent.height - 16px;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Tokens.border;
+        background: Tokens.canvas;
+        clip: true;
 
-            if root.draft == "": Text {
-                x: 10px;
-                width: parent.width - 20px;
-                vertical-alignment: center;
-                color: #6b6f76;
-                text: "タスクを入力してEnter";
+        VerticalLayout {
+            // 主ヘッダー。高さ44px。
+            Rectangle {
+                height: 44px;
+                Text {
+                    x: 16px;
+                    vertical-alignment: center;
+                    font-weight: 500;
+                    color: Tokens.text-primary;
+                    text: "タスク";
+                }
+
+                Text {
+                    x: parent.width - self.width - 16px;
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: Tokens.error-text;
+                    text: root.status;
+                }
             }
 
-            input := TextInput {
-                x: 10px;
-                width: parent.width - 20px;
-                vertical-alignment: center;
-                single-line: true;
-                color: #e6e6e6;
-                accessible-label: "新しいタスク";
-                accepted => {
-                    root.enter-count += 1;
-                    root.create(self.text);
+            Rectangle {
+                height: 1px;
+                background: Tokens.border;
+            }
+
+            // 仮の作成欄。作成ダイアログを作ったら置き換える。
+            Rectangle {
+                height: 44px;
+                Rectangle {
+                    x: 12px;
+                    y: 6px;
+                    width: parent.width - 24px;
+                    height: 32px;
+                    border-radius: 6px;
+                    border-width: 1px;
+                    border-color: input.has-focus ? Tokens.focus-ring : Tokens.border;
+                    background: Tokens.surface;
+
+                    if root.draft == "": Text {
+                        x: 10px;
+                        width: parent.width - 20px;
+                        vertical-alignment: center;
+                        color: Tokens.text-secondary;
+                        text: "タスクを入力してEnter";
+                    }
+
+                    input := TextInput {
+                        x: 10px;
+                        width: parent.width - 20px;
+                        vertical-alignment: center;
+                        single-line: true;
+                        color: Tokens.text-primary;
+                        accessible-label: "新しいタスク";
+                        accepted => {
+                            root.create(self.text);
+                        }
+                    }
                 }
+            }
+
+            keys := FocusScope {
                 key-pressed(event) => {
-                    if (event.text == Key.Escape) {
-                        root.escape-count += 1;
+                    if event.text == Key.DownArrow {
+                        root.select(root.selected-index + 1);
+                        return accept;
+                    }
+                    if event.text == Key.UpArrow {
+                        root.select(root.selected-index - 1);
+                        return accept;
+                    }
+                    if event.text == Key.Home {
+                        root.select(0);
+                        return accept;
+                    }
+                    if event.text == Key.End {
+                        root.select(root.tasks.length - 1);
+                        return accept;
+                    }
+                    if event.text == " " && root.tasks.length > 0 {
+                        root.toggle(root.selected-index);
                         return accept;
                     }
                     return reject;
                 }
-            }
-        }
 
-        Text {
-            color: #8a8f98;
-            text: "Enter受信 " + root.enter-count + " 回 / Esc受信 " + root.escape-count + " 回　" + root.status;
-        }
-
-        ListView {
-            for task in root.tasks: Rectangle {
-                height: 44px;
-                accessible-role: list-item;
-                accessible-label: task.title;
-                Text {
-                    x: 10px;
-                    width: parent.width - 20px;
-                    vertical-alignment: center;
-                    overflow: elide;
-                    color: task.done ? #6b6f76 : #e6e6e6;
-                    text: task.title;
+                list := ListView {
+                    accessible-role: AccessibleRole.list;
+                    accessible-label: "タスク";
+                    for task[index] in root.tasks: Rectangle {
+                        height: Tokens.row-height;
+                        TaskRow {
+                            x: 8px;
+                            width: parent.width - 16px;
+                            task: task;
+                            selected: index == root.selected-index;
+                            focused: keys.has-focus;
+                            clicked => {
+                                keys.focus();
+                                root.select(index);
+                            }
+                            toggled => {
+                                root.toggle(index);
+                            }
+                        }
+                    }
                 }
             }
         }

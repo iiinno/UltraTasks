@@ -6,7 +6,12 @@ use ultratasks_core::*;
 
 slint::include_modules!();
 
-fn rows(store: &mut Store) -> Result<Vec<TaskItem>> {
+struct State {
+    store: Store,
+    rows: Vec<TaskRow>,
+}
+
+fn load(store: &mut Store) -> Result<Vec<TaskRow>> {
     let zone = ZoneId::parse("Asia/Tokyo")?;
     let day = Date::today(&zone)?;
     let query = TaskQuery {
@@ -21,15 +26,7 @@ fn rows(store: &mut Store) -> Result<Vec<TaskItem>> {
         size: PageSize::new(MAX_PAGE_SIZE)?,
         position: TaskPosition::First,
     };
-    Ok(store
-        .tasks(query, request)?
-        .items
-        .into_iter()
-        .map(|row| TaskItem {
-            title: row.task.data.title.as_str().into(),
-            done: row.task.data.status == TaskStatus::Done,
-        })
-        .collect())
+    Ok(store.tasks(query, request)?.items)
 }
 
 fn create(store: &mut Store, title: &str) -> Result<()> {
@@ -46,11 +43,36 @@ fn create(store: &mut Store, title: &str) -> Result<()> {
     Ok(())
 }
 
-fn show(ui: &AppWindow, store: &mut Store) {
-    match rows(store) {
-        Ok(items) => ui.set_tasks(ModelRc::new(VecModel::from(items))),
-        Err(error) => ui.set_status(error.to_string().into()),
-    }
+fn toggle(store: &mut Store, row: &TaskRow) -> Result<()> {
+    let mut data = row.task.data.clone();
+    data.status = match data.status {
+        TaskStatus::Open => TaskStatus::Done,
+        TaskStatus::Done => TaskStatus::Open,
+    };
+    store.save_task(Save::Update {
+        expected: row.task.key,
+        data,
+    })?;
+    Ok(())
+}
+
+// 保存の成否にかかわらず一覧を読み直し、画面をDBの状態へ合わせる。
+fn finish(ui: &AppWindow, state: &mut State, saved: Result<()>) {
+    let loaded = load(&mut state.store).map(|rows| state.rows = rows);
+    let items: Vec<TaskItem> = state
+        .rows
+        .iter()
+        .map(|row| TaskItem {
+            title: row.task.data.title.as_str().into(),
+            meta: row.list_title.as_str().into(),
+            done: row.task.data.status == TaskStatus::Done,
+        })
+        .collect();
+    ui.set_tasks(ModelRc::new(VecModel::from(items)));
+    ui.set_status(match saved.and(loaded) {
+        Ok(()) => "".into(),
+        Err(error) => error.to_string().into(),
+    });
 }
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -59,23 +81,35 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .join("skeleton");
     std::fs::create_dir_all(&dir)?;
     // shortcut: 保存をUIスレッドで直接呼ぶ。骨格の判定が済んだら既存workerへ移す。
-    let store = Rc::new(RefCell::new(Store::open(&dir.join("skeleton.sqlite"))?));
+    let state = Rc::new(RefCell::new(State {
+        store: Store::open(&dir.join("skeleton.sqlite"))?,
+        rows: Vec::new(),
+    }));
 
     let ui = AppWindow::new()?;
-    show(&ui, &mut store.borrow_mut());
+    finish(&ui, &mut state.borrow_mut(), Ok(()));
 
-    let weak = ui.as_weak();
+    let (weak, shared) = (ui.as_weak(), state.clone());
     ui.on_create(move |title| {
         let Some(ui) = weak.upgrade() else { return };
-        let mut store = store.borrow_mut();
-        match create(&mut store, &title) {
-            Ok(()) => {
-                ui.set_draft("".into());
-                ui.set_status("".into());
-                show(&ui, &mut store);
-            }
-            Err(error) => ui.set_status(error.to_string().into()),
+        let mut state = shared.borrow_mut();
+        let saved = create(&mut state.store, &title);
+        if saved.is_ok() {
+            ui.set_draft("".into());
         }
+        finish(&ui, &mut state, saved);
+    });
+
+    let weak = ui.as_weak();
+    ui.on_toggle(move |index| {
+        let Some(ui) = weak.upgrade() else { return };
+        let mut state = state.borrow_mut();
+        let Some(row) = usize::try_from(index).ok().and_then(|i| state.rows.get(i).cloned())
+        else {
+            return;
+        };
+        let saved = toggle(&mut state.store, &row);
+        finish(&ui, &mut state, saved);
     });
 
     ui.run()?;
