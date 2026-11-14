@@ -24,7 +24,7 @@ jobs:
         run: |
           rustup toolchain install 1.99.1-x86_64-pc-windows-msvc --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo build --release
+          cargo build --release --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $exe = Get-ChildItem -Path target -Recurse -Filter ultratasks-skeleton.exe | Select-Object -First 1
           New-Item -ItemType Directory -Path out | Out-Null
