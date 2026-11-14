@@ -8,7 +8,8 @@ publish = false
 [workspace]
 
 [dependencies]
-slint = "=1.18.1"
+# 実測でOpenGL描画は約103MB、ソフトウェア描画は6.5MBだったため、ソフトウェア描画だけを組み込む。
+slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-software", "accessibility", "compat-1-2"] }
 ultratasks-core = { path = "../../crates/ultratasks-core" }
 
 [build-dependencies]
